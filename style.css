@@ -1,0 +1,77 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-black: #000000;
+  --color-slate: #64748b;
+  --color-primary: #8c42d7;
+  --color-dark: #020817;
+  --color-light: #e2e8f0;
+  --color-soft: #f7f0ff;
+  --color-gray: #fafafa;
+  --color-white: #ffffff;
+
+  --font-montserrat: 'Montserrat Alternates', sans-serif;
+}
+
+/* Text Colors */
+.text-black {
+  color: var(--color-black);
+}
+.text-slate {
+  color: var(--color-slate);
+}
+.text-primary {
+  color: var(--color-primary);
+}
+.text-dark {
+  color: var(--color-dark);
+}
+.text-light {
+  color: var(--color-light);
+}
+.text-soft {
+  color: var(--color-soft);
+}
+.text-gray {
+  color: var(--color-gray);
+}
+.text-white {
+  color: var(--color-white);
+}
+
+/* Background Colors */
+.bg-black {
+  background-color: var(--color-black);
+}
+.bg-slate {
+  background-color: var(--color-slate);
+}
+.bg-primary {
+  background-color: var(--color-primary);
+}
+.bg-dark {
+  background-color: var(--color-dark);
+}
+.bg-light {
+  background-color: var(--color-light);
+}
+.bg-soft {
+  background-color: var(--color-soft);
+}
+.bg-gray {
+  background-color: var(--color-gray);
+}
+.bg-white {
+  background-color: var(--color-white);
+}
+
+/* Font */
+.font-montserrat {
+  font-family: var(--font-montserrat);
+}
+
+@layer components {
+  .button {
+    @apply px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600;
+  }
+}
