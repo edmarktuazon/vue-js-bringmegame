@@ -8,6 +8,7 @@
   --color-light: #e2e8f0;
   --color-soft: #f7f0ff;
   --color-gray: #fafafa;
+  --color-dark-gray: #303030;
   --color-white: #ffffff;
 
   --font-montserrat: 'Montserrat Alternates', sans-serif;
@@ -35,6 +36,9 @@
 .text-gray {
   color: var(--color-gray);
 }
+.text-dark-gray {
+  color: var(--color-dark-gray);
+}
 .text-white {
   color: var(--color-white);
 }
@@ -60,6 +64,9 @@
 }
 .bg-gray {
   background-color: var(--color-gray);
+}
+.bg-ark-gray {
+  background-color: var(--color-dark-gray);
 }
 .bg-white {
   background-color: var(--color-white);

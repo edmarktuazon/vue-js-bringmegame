@@ -1,9 +1,7 @@
 <script setup>
-import NavigationItem from './components/NavigationItem.vue'
-import HomeFormView from './views/HomeFormView.vue'
+import { RouterView } from 'vue-router'
 </script>
 
 <template>
-  <NavigationItem />
-  <HomeFormView />
+  <RouterView />
 </template>
