@@ -1,7 +1,7 @@
 <script setup>
-import HeaderFormModal from './modal/HeaderFormModal.vue'
+import NavigationFormModal from './NavigationFormModal.vue'
 </script>
 
 <template>
-  <HeaderFormModal />
+  <NavigationFormModal />
 </template>

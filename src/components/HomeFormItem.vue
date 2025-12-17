@@ -18,7 +18,6 @@ onMounted(async () => {
   try {
     activeGame.value = await getActiveGame()
 
-    // Real-time listener para sa status changes
     if (activeGame.value) {
       const gameRef = doc(db, 'games', activeGame.value.id)
       unsubscribeGame = onSnapshot(gameRef, (doc) => {
@@ -43,7 +42,6 @@ const handleSubmit = async (e) => {
 
   if (!instagramHandle.value.trim()) return
 
-  // Ensure handle starts with @
   let handle = instagramHandle.value.trim()
   if (!handle.startsWith('@')) {
     handle = '@' + handle
@@ -53,7 +51,6 @@ const handleSubmit = async (e) => {
   errorMessage.value = ''
 
   try {
-    // Check if game is active
     if (!activeGame.value) {
       throw new Error('No active game available')
     }
@@ -62,13 +59,10 @@ const handleSubmit = async (e) => {
       throw new Error('This game has ended. Please wait for the next game!')
     }
 
-    // Create or get user
     const user = await createUser(handle)
 
-    // Update user's current game
     await updateUserCurrentGame(user.id, activeGame.value.id)
 
-    // Store user info in localStorage for session
     localStorage.setItem(
       'bmg_user',
       JSON.stringify({
@@ -80,7 +74,6 @@ const handleSubmit = async (e) => {
 
     console.log('✅ User joined game:', handle)
 
-    // Navigate to game page
     router.push('/game')
   } catch (error) {
     console.error('❌ Error joining game:', error)
@@ -96,13 +89,13 @@ const handleSubmit = async (e) => {
     <form class="relative w-full max-w-sm text-center" @submit="handleSubmit">
       <div class="rounded-lg bg-white shadow-xl w-full">
         <!-- logo and text -->
-        <div class="flex items-center flex-col px-6 pt-6 pb-4 space-y-6">
-          <img :src="BMGLogo" class="w-48 h-24.25" alt="Bring Me Game Logo" />
-          <div>
-            <p class="text-sm text-dark-gray mb-2">Enter your Instagram handle to join the game.</p>
+        <div class="flex items-center flex-col px-6 pt-6">
+          <img :src="BMGLogo" class="w-48 h-24.25 mb-10" alt="Bring Me Game Logo" />
+          <div class="space-y-2">
             <p v-if="activeGame" class="text-xs text-primary font-semibold">
               Game Status: {{ activeGame.status.toUpperCase() }}
             </p>
+            <p class="text-sm text-dark-gray mb-2">Enter your Instagram handle to join the game.</p>
           </div>
         </div>
 
@@ -111,21 +104,19 @@ const handleSubmit = async (e) => {
           <input
             v-model="instagramHandle"
             type="text"
-            class="bg-soft w-full text-dark-gray font-montserrat text-sm p-3 rounded-md outline-primary focus:outline-none focus:ring-2 focus:ring-primary"
+            class="bg-soft w-full text-dark-gray font-montserrat text-sm p-3 rounded-md outline-primary focus:outline-none focus:ring-2 focus:ring-primary transition-all"
             placeholder="@yourhandle"
             required
-            :disabled="loading || !activeGame || activeGame.status === 'ended'"
+            :disabled="loading"
           />
-
-          <!-- Error Message -->
-          <p v-if="errorMessage" class="text-red-600 text-sm">{{ errorMessage }}</p>
 
           <button
             type="submit"
-            :disabled="loading || !activeGame || activeGame.status === 'ended'"
-            class="w-full bg-primary text-white font-semibold py-3 rounded-md transition-colors cursor-pointer hover:bg-primary/90 focus:outline focus:outline-2 focus:outline-primary disabled:opacity-50 disabled:cursor-not-allowed"
+            :disabled="loading"
+            class="w-full bg-primary text-white font-semibold py-3 rounded-md transition-all duration-200 hover:bg-primary/90 focus:outline focus:outline-2 focus:outline-primary disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {{ loading ? 'Joining...' : 'Join Game' }}
+            <span v-if="loading">Joining...</span>
+            <span v-else>Join Game</span>
           </button>
         </div>
 

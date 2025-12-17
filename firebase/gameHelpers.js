@@ -1,5 +1,4 @@
 // firebase/gameHelpers.js
-import { ref } from 'vue'
 import { db, storage } from '/firebase/config'
 import {
   collection,
@@ -24,14 +23,22 @@ import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage
 
 export const submitPhoto = async (gameId, userId, instagramHandle, promptIndex, file) => {
   try {
+    console.log('Starting upload...', { gameId, userId, promptIndex, fileType: file.type })
+
     const imgRef = storageRef(storage, `submissions/${gameId}/${userId}/prompt_${promptIndex}.jpg`)
 
     // Upload file
+    console.log('Uploading to storage...')
     await uploadBytes(imgRef, file)
-    const photoUrl = await getDownloadURL(imgRef)
+    console.log('File uploaded, getting URL...')
 
-    // Save submission
+    const photoUrl = await getDownloadURL(imgRef)
+    console.log('Got photo URL:', photoUrl)
+
+    // Save submission with server timestamp for real-time ordering
     const submissionRef = doc(db, 'games', gameId, 'submissions', `${userId}_${promptIndex}`)
+    console.log('Saving to Firestore...')
+
     await setDoc(
       submissionRef,
       {
@@ -40,17 +47,22 @@ export const submitPhoto = async (gameId, userId, instagramHandle, promptIndex, 
         instagramHandle,
         promptIndex,
         photoUrl,
-        status: 'pending',
+        status: 'pending', // ✅ Always starts as pending
         createdAt: serverTimestamp(),
-        uploadedAt: serverTimestamp(), // ✅ Para sa listenToSubmissions order
+        uploadedAt: serverTimestamp(),
       },
       { merge: true },
     )
 
-    console.log(`Upload successful for prompt ${promptIndex}`)
+    console.log(`✅ Upload successful for prompt ${promptIndex} - Status: PENDING`)
     return photoUrl
   } catch (error) {
-    console.error('Error submitting photo:', error)
+    console.error('❌ Error submitting photo:', error)
+    console.error('Error details:', {
+      message: error.message,
+      code: error.code,
+      stack: error.stack,
+    })
     throw error
   }
 }
@@ -59,9 +71,16 @@ export const getActiveGame = async () => {
   try {
     const q = query(collection(db, 'games'), where('isActive', '==', true), limit(1))
     const snapshot = await getDocs(q)
-    if (snapshot.empty) return null
+    if (snapshot.empty) {
+      console.log('⚠️ No active game found')
+      return null
+    }
     const gameDoc = snapshot.docs[0]
-    return { id: gameDoc.id, ...gameDoc.data() }
+    const gameData = { id: gameDoc.id, ...gameDoc.data() }
+    console.log('✅ Active game loaded:', gameData)
+    console.log('   Game ID:', gameData.id)
+    console.log('   Created by:', gameData.createdBy)
+    return gameData
   } catch (error) {
     console.error('Error getting active game:', error)
     throw error
@@ -84,22 +103,27 @@ export const createGame = async (prompts, createdByEmail) => {
       batch.update(doc.ref, { isActive: false })
     })
 
-    // Create new game — ACTIVE agad kapag may prompts!
+    // Create new game
     const newGameRef = doc(collection(db, 'games'))
     const newGameData = {
       prompts: prompts.map((p) => p.trim()),
-      status: 'active', // ← AGAD ACTIVE!
+      status: 'active',
       isActive: true,
       createdBy: createdByEmail,
       createdAt: serverTimestamp(),
+      startedAt: serverTimestamp(),
       prize: { description: '', logoUrl: '' },
     }
 
     batch.set(newGameRef, newGameData)
     await batch.commit()
 
-    console.log('New game created and STARTED:', newGameRef.id)
-    return { id: newGameRef.id, ...newGameData }
+    console.log('✅ New game created and STARTED:', newGameRef.id)
+
+    return {
+      id: newGameRef.id,
+      ...newGameData,
+    }
   } catch (error) {
     console.error('Error creating game:', error)
     throw error
@@ -113,7 +137,6 @@ export const updateGameStatus = async (gameId, newStatus) => {
 
   const data = snap.data()
 
-  // Kung gusto maging active PERO WALANG 3 PROMPTS → block!
   if (newStatus === 'active') {
     const prompts = data.prompts || []
     const valid =
@@ -123,16 +146,15 @@ export const updateGameStatus = async (gameId, newStatus) => {
     }
   }
 
-  // Kung mag-e-end, okay lang kahit walang prompts
   await updateDoc(gameRef, { status: newStatus })
-
   console.log('Status updated to:', newStatus)
 }
+
 export const updatePrize = async (gameId, description, logoFile) => {
   try {
     let logoUrl = ''
     if (logoFile) {
-      const fileRef = ref(storage, `games/${gameId}/prizes/logo.jpg`)
+      const fileRef = storageRef(storage, `games/${gameId}/prizes/logo.jpg`)
       await uploadBytes(fileRef, logoFile)
       logoUrl = await getDownloadURL(fileRef)
     }
@@ -195,95 +217,274 @@ export const updateUserCurrentGame = async (userId, gameId) => {
 }
 
 // ============================================
-// SUBMISSION FUNCTIONS (FIXED PATHS!)
+// SUBMISSION FUNCTIONS
 // ============================================
 
-// FIXED: Correct path to subcollection
-// BEST & FASTEST FIX – no need for new index!
 export const getUserSubmissions = async (gameId, userId) => {
-  const q = query(collection(db, 'games', gameId, 'submissions'), where('userId', '==', userId))
+  try {
+    console.log('Getting user submissions...', { gameId, userId })
+    const q = query(collection(db, 'games', gameId, 'submissions'), where('userId', '==', userId))
 
-  const snapshot = await getDocs(q)
+    const snapshot = await getDocs(q)
+    console.log('Found submissions:', snapshot.size)
 
-  const result = {}
+    const result = {}
 
-  snapshot.forEach((doc) => {
-    const data = doc.data()
+    snapshot.forEach((doc) => {
+      const data = doc.data()
+      result[data.promptIndex] = {
+        id: doc.id,
+        ...data,
+      }
+    })
 
-    // 🔑 KEY FIX HERE
-    result[data.promptIndex] = {
-      id: doc.id,
-      ...data,
-    }
-  })
-
-  return result
+    console.log('Processed submissions:', result)
+    return result
+  } catch (error) {
+    console.error('Error getting user submissions:', error)
+    throw error
+  }
 }
 
-// FIXED: Real-time admin submissions (use in AdminView with onSnapshot)
+// ✅ UPDATED: Get ALL submissions from ALL games with REAL-TIME updates
+export const getAllSubmissions = (callback) => {
+  const gamesRef = collection(db, 'games')
+
+  return onSnapshot(gamesRef, async (gamesSnapshot) => {
+    const allSubmissions = []
+    const submissionPromises = []
+
+    // Create listeners for each game's submissions
+    gamesSnapshot.docs.forEach((gameDoc) => {
+      const gameId = gameDoc.id
+      const subsRef = collection(db, 'games', gameId, 'submissions')
+
+      // Create a promise that listens to this game's submissions
+      const submissionPromise = new Promise((resolve) => {
+        onSnapshot(subsRef, (subsSnapshot) => {
+          const gameSubs = []
+          subsSnapshot.forEach((subDoc) => {
+            gameSubs.push({
+              id: subDoc.id,
+              gameId,
+              ...subDoc.data(),
+            })
+          })
+          resolve(gameSubs)
+        })
+      })
+
+      submissionPromises.push(submissionPromise)
+    })
+
+    // Wait for all submissions from all games
+    const allGameSubmissions = await Promise.all(submissionPromises)
+    allGameSubmissions.forEach((gameSubs) => {
+      allSubmissions.push(...gameSubs)
+    })
+
+    // Sort by uploadedAt descending (newest first)
+    allSubmissions.sort((a, b) => {
+      const timeA = a.uploadedAt?.toMillis?.() || 0
+      const timeB = b.uploadedAt?.toMillis?.() || 0
+      return timeB - timeA
+    })
+
+    console.log(`✅ Real-time update: ${allSubmissions.length} submissions`)
+    callback(allSubmissions)
+  })
+}
+
+// ✅ Get submissions for current game only with REAL-TIME updates
 export const listenToSubmissions = (gameId, callback) => {
+  console.log('🔴 Setting up real-time listener for game:', gameId)
+
   const q = query(collection(db, 'games', gameId, 'submissions'), orderBy('uploadedAt', 'desc'))
 
-  return onSnapshot(q, (snapshot) => {
-    const subs = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }))
-    callback(subs)
-  })
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const subs = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        gameId,
+        ...doc.data(),
+      }))
+
+      console.log(`🔴 Real-time update: ${subs.length} submissions received`)
+      callback(subs)
+    },
+    (error) => {
+      console.error('❌ Error in real-time listener:', error)
+    },
+  )
 }
 
-export const updateSubmissionStatus = async (submissionId, status, adminEmail, gameId) => {
+// ✅ UPDATED: Update submission status with immediate feedback
+export const updateSubmissionStatus = async (gameId, submissionId, status, adminEmail) => {
   try {
+    console.log('🔄 Attempting to update submission:', { gameId, submissionId, status })
+
+    if (!gameId || !submissionId) {
+      throw new Error('Missing gameId or submissionId')
+    }
+
     const submissionRef = doc(db, 'games', gameId, 'submissions', submissionId)
+    const submissionSnap = await getDoc(submissionRef)
+
+    if (!submissionSnap.exists()) {
+      console.error('Submission document not found:', {
+        gameId,
+        submissionId,
+        fullPath: submissionRef.path,
+      })
+      throw new Error(`Submission not found: ${submissionId} in game ${gameId}`)
+    }
+
     await updateDoc(submissionRef, {
       status,
       reviewedBy: adminEmail,
       reviewedAt: serverTimestamp(),
     })
-    console.log('Submission updated:', status)
+
+    console.log('✅ Successfully updated submission status to:', status)
+    return true
   } catch (error) {
-    console.error('Error updating submission:', error)
+    console.error('❌ Failed to update submission:', error)
     throw error
   }
 }
 
 // ============================================
-// LEADERBOARD (Optional – keep if needed)
+// LEADERBOARD
 // ============================================
 
-export const getLeaderboard = async (gameId) => {
+// ============================================
+// LEADERBOARD – Updated for real-time completion time (unverified)
+// ============================================
+
+export const getLeaderboard = async (gameId, onlyApproved = false) => {
   try {
-    const q = query(
-      collection(db, 'games', gameId, 'submissions'),
-      where('status', '==', 'approved'),
-    )
+    let q = query(collection(db, 'games', gameId, 'submissions'))
+
+    if (onlyApproved) {
+      q = query(q, where('status', '==', 'approved'))
+    }
+
     const snapshot = await getDocs(q)
 
-    const userTimes = {}
+    const userSubmissions = {}
+
     snapshot.forEach((doc) => {
       const data = doc.data()
-      if (!userTimes[data.userId]) {
-        userTimes[data.userId] = {
-          instagramHandle: data.instagramHandle,
+      const { userId, instagramHandle, uploadedAt, promptIndex } = data
+
+      if (!userId || !uploadedAt) return
+
+      if (!userSubmissions[userId]) {
+        userSubmissions[userId] = {
+          instagramHandle,
           times: [],
+          promptIndices: new Set(),
         }
       }
-      if (data.uploadedAt) {
-        userTimes[data.userId].times.push(data.uploadedAt.toMillis())
-      }
+
+      const timeMs = uploadedAt.toMillis()
+      userSubmissions[userId].times.push(timeMs)
+      userSubmissions[userId].promptIndices.add(promptIndex)
     })
 
-    const leaderboard = Object.entries(userTimes)
-      .map(([userId, info]) => {
-        if (info.times.length !== 3) return null
-        const totalTime = Math.max(...info.times) - Math.min(...info.times)
-        return { userId, instagramHandle: info.instagramHandle, totalTime }
-      })
-      .filter(Boolean)
-      .sort((a, b) => a.totalTime - b.totalTime)
-      .map((entry, index) => ({ rank: index + 1, ...entry }))
+    const leaderboard = []
 
-    return leaderboard
+    Object.entries(userSubmissions).forEach(([userId, info]) => {
+      // Dapat exactly 3 different prompts
+      if (info.promptIndices.size !== 3) return
+
+      const startTime = Math.min(...info.times)
+      const endTime = Math.max(...info.times)
+      const totalTime = endTime - startTime
+
+      // Inside the leaderboard mapping
+      leaderboard.push({
+        userId,
+        instagramHandle: info.instagramHandle,
+        totalTime,
+        formattedTime: formatDetailedTime(totalTime), // ← Use the new function
+        completedAt: endTime,
+      })
+    })
+
+    // Sort by fastest first
+    leaderboard.sort((a, b) => a.totalTime - b.totalTime)
+
+    // Add rank
+    return leaderboard.map((entry, index) => ({
+      ...entry,
+      rank: index + 1,
+    }))
   } catch (error) {
     console.error('Error getting leaderboard:', error)
     return []
   }
+}
+
+const formatTime = (ms) => {
+  if (ms < 1000) return `${ms}ms`
+  const totalSeconds = Math.floor(ms / 1000)
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+  const millis = ms % 1000
+
+  if (minutes > 0) {
+    return `${minutes}m ${seconds.toString().padStart(2, '0')}s`
+  }
+  return `${seconds}s ${millis.toString().padStart(3, '0').slice(0, 1)}` // e.g., 12s 3
+}
+
+export const getUserCompletionTime = async (gameId, userId) => {
+  try {
+    const q = query(collection(db, 'games', gameId, 'submissions'), where('userId', '==', userId))
+    const snapshot = await getDocs(q)
+
+    if (snapshot.size !== 3) return null
+
+    const times = []
+    snapshot.forEach((doc) => {
+      const data = doc.data()
+      if (data.uploadedAt) {
+        times.push(data.uploadedAt.toMillis())
+      }
+    })
+
+    if (times.length !== 3) return null
+
+    const startTime = Math.min(...times)
+    const endTime = Math.max(...times)
+    const totalTime = endTime - startTime
+
+    return {
+      totalTime,
+      formattedTime: formatDetailedTime(totalTime), // e.g., "3m 16s 230ms"
+      formatTime,
+      startTime,
+      endTime,
+    }
+  } catch (error) {
+    console.error('Error getting user completion time:', error)
+    return null
+  }
+}
+
+// Shared detailed time formatter with milliseconds
+export const formatDetailedTime = (ms) => {
+  if (ms <= 0) return '0s 0ms'
+
+  const minutes = Math.floor(ms / 60000)
+  const seconds = Math.floor((ms % 60000) / 1000)
+  const millis = ms % 1000
+
+  const minPart = minutes > 0 ? `${minutes}m ` : ''
+  const secPart = `${seconds}s `
+  const msPart = `${millis.toString().padStart(3, '0')}ms`
+
+  return `${minPart}${secPart}${msPart}`.trim()
 }

@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, watch, computed, onUnmounted } from 'vue'
+import { ref, onMounted, computed, watch, onUnmounted } from 'vue'
 import { auth } from '/firebase/config'
 import { useRouter } from 'vue-router'
 import { signOut } from 'firebase/auth'
@@ -10,6 +10,8 @@ import {
   updatePrize,
   updateSubmissionStatus,
   getLeaderboard,
+  getAllSubmissions,
+  listenToSubmissions,
 } from '/firebase/gameHelpers'
 import { db } from '/firebase/config'
 import { collection, query, where, onSnapshot, orderBy } from 'firebase/firestore'
@@ -24,6 +26,8 @@ const gameStatus = ref('waiting')
 const prompt1 = ref('')
 const prompt2 = ref('')
 const prompt3 = ref('')
+const approvingId = ref(null)
+const rejectingId = ref(null)
 
 const prizeDescription = ref('')
 const prizeLogoFile = ref(null)
@@ -53,6 +57,8 @@ const isLoggingOut = ref(false)
 // ===============================================
 onMounted(() => {
   setupUsersListener()
+  setupSubmissionsListener() // ✅ Call once here
+  // setupLeaderboardListener()
   loadGameData()
 })
 
@@ -88,30 +94,84 @@ const setupUsersListener = () => {
 // 2. Submissions – real-time pag may nag-upload
 const setupSubmissionsListener = () => {
   if (unsubscribeSubmissions) unsubscribeSubmissions()
+
+  // Import getAllSubmissions first!
+  unsubscribeSubmissions = getAllSubmissions((allSubs) => {
+    submissions.value = allSubs
+    console.log(`📊 Loaded ${allSubs.length} submissions from all games`)
+  })
+}
+
+// Watch game change → restart submissions listener
+// watch(currentGame, () => {
+//   setupSubmissionsListener()
+// })
+
+// ===============================================
+// DATA LOADING
+// ===============================================
+// const setupLeaderboardListener = () => {
+//   if (!currentGame.value?.id) {
+//     leaderboard.value = []
+//     return
+//   }
+
+//   const q = collection(db, 'games', currentGame.value.id, 'submissions')
+
+//   return onSnapshot(q, async () => {
+//     // Every time may bagong submission or update, recalculate leaderboard
+//     leaderboard.value = await getLeaderboard(currentGame.value.id, false) // false = include pending/rejected
+//     console.log('Leaderboard updated:', leaderboard.value)
+//   })
+// }
+
+// Real-time leaderboard updates
+watch(
+  () => submissions.value, // Re-run whenever submissions change
+  async () => {
+    if (!currentGame.value?.id || submissions.value.length === 0) {
+      leaderboard.value = []
+      return
+    }
+
+    leaderboard.value = await getLeaderboard(currentGame.value.id, false)
+    console.log('Leaderboard auto-updated!', leaderboard.value)
+  },
+  { immediate: true }, // Run once on load too
+)
+
+// let unsubscribeLeaderboard = null
+
+// NEW: Listener for CURRENT game submissions only
+const setupCurrentSubmissionsListener = () => {
+  if (unsubscribeSubmissions) unsubscribeSubmissions()
+
   if (!currentGame.value?.id) {
     submissions.value = []
     return
   }
 
-  const subsRef = collection(db, 'games', currentGame.value.id, 'submissions')
-  const q = query(subsRef, orderBy('uploadedAt', 'desc'))
-
-  unsubscribeSubmissions = onSnapshot(q, (snapshot) => {
-    submissions.value = snapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-    }))
+  unsubscribeSubmissions = listenToSubmissions(currentGame.value.id, (subs) => {
+    submissions.value = subs
+    console.log(`Real-time submissions: ${subs.length}`)
   })
 }
 
-// Watch game change → restart submissions listener
-watch(currentGame, () => {
-  setupSubmissionsListener()
-})
+watch(
+  () => currentGame.value?.id,
+  () => {
+    setupCurrentSubmissionsListener()
+  },
+)
 
-// ===============================================
-// DATA LOADING
-// ===============================================
+// Watch for game change (important pag nag-create ng bagong game)
+watch(
+  () => currentGame.value?.id,
+  () => {
+    setupCurrentSubmissionsListener()
+  },
+)
+
 const loadGameData = async () => {
   try {
     loadingGame.value = true
@@ -122,11 +182,14 @@ const loadGameData = async () => {
       prizeDescription.value = currentGame.value.prize?.description || ''
       prizeLogoPreview.value = currentGame.value.prize?.logoUrl || null
 
-      setupSubmissionsListener()
+      // Setup listener for current game submissions
+      setupCurrentSubmissionsListener()
+
       await loadLeaderboard()
     } else {
       submissions.value = []
       leaderboard.value = []
+      if (unsubscribeSubmissions) unsubscribeSubmissions()
     }
   } catch (error) {
     console.error('Error loading game:', error)
@@ -134,6 +197,11 @@ const loadGameData = async () => {
     loadingGame.value = false
   }
 }
+
+// onUnmounted(() => {
+//   if (unsubscribeLeaderboard) unsubscribeLeaderboard()
+//   // ... existing unsubscribes
+// })
 
 const loadLeaderboard = async () => {
   if (!currentGame.value) return
@@ -189,8 +257,9 @@ const handleCreateGame = async () => {
     loadingGame.value = true
     await createGame([p1, p2, p3], auth.currentUser.email)
 
-    // Walang kailangang i-update status — active na agad!
     prompt1.value = prompt2.value = prompt3.value = ''
+
+    // ✅ RELOAD GAME DATA to get proper ID
     await loadGameData()
 
     alert('Game successfully created and STARTED!')
@@ -240,12 +309,30 @@ const handleSavePrize = async () => {
 }
 
 const handleApproveSubmission = async (id) => {
-  await updateSubmissionStatus(id, 'approved', auth.currentUser.email)
-  await loadLeaderboard() // update leaderboard instantly
+  if (!currentGame.value?.id) return
+  approvingId.value = id
+  try {
+    await updateSubmissionStatus(currentGame.value.id, id, 'approved', auth.currentUser.email)
+    await loadLeaderboard()
+    activeTab.value = 'approved'
+  } catch (error) {
+    alert('Failed to approve: ' + error.message)
+  } finally {
+    approvingId.value = null
+  }
 }
 
 const handleRejectSubmission = async (id) => {
-  await updateSubmissionStatus(id, 'rejected', auth.currentUser.email)
+  if (!currentGame.value?.id) return
+  rejectingId.value = id
+  try {
+    await updateSubmissionStatus(currentGame.value.id, id, 'rejected', auth.currentUser.email)
+    activeTab.value = 'rejected'
+  } catch (error) {
+    alert('Failed to reject: ' + error.message)
+  } finally {
+    rejectingId.value = null
+  }
 }
 
 const confirmLogout = async () => {
@@ -262,7 +349,7 @@ const confirmLogout = async () => {
         <span class="text-xl font-bold"> Bring<span class="text-primary">Me</span> </span>
         <button
           @click="showLogoutModal = true"
-          class="flex items-center gap-1 text-sm text-slate hover:text-dark transition"
+          class="flex items-center gap-1 text-dark-gray-gray transition cursor-pointer"
         >
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path
@@ -279,7 +366,7 @@ const confirmLogout = async () => {
 
     <!-- Main content -->
     <main class="max-w-6xl mx-auto px-4 py-8">
-      <h1 class="text-3xl font-bold text-dark mb-8">Admin Panel</h1>
+      <h1 class="text-3xl font-bold text-dark-gray mb-8">Admin Panel</h1>
 
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <!-- Left column -->
@@ -295,7 +382,7 @@ const confirmLogout = async () => {
                   d="M12 4v16m8-8H4"
                 />
               </svg>
-              <h2 class="text-lg font-semibold text-dark">Create New Game</h2>
+              <h2 class="text-lg font-semibold text-dark-gray">Create New Game</h2>
             </div>
             <p class="text-xs text-slate mb-4">
               Enter 3 prompts to start a new game. This will reset the current game and archive the
@@ -304,7 +391,7 @@ const confirmLogout = async () => {
 
             <div class="space-y-4">
               <div>
-                <label class="block text-sm font-medium text-dark mb-2">Prompt 1</label>
+                <label class="block text-sm font-medium text-dark-gray mb-2">Prompt 1</label>
                 <input
                   v-model="prompt1"
                   type="text"
@@ -313,7 +400,7 @@ const confirmLogout = async () => {
                 />
               </div>
               <div>
-                <label class="block text-sm font-medium text-dark mb-2">Prompt 2</label>
+                <label class="block text-sm font-medium text-dark-gray mb-2">Prompt 2</label>
                 <input
                   v-model="prompt2"
                   type="text"
@@ -322,7 +409,7 @@ const confirmLogout = async () => {
                 />
               </div>
               <div>
-                <label class="block text-sm font-medium text-dark mb-2">Prompt 3</label>
+                <label class="block text-sm font-medium text-dark-gray mb-2">Prompt 3</label>
                 <input
                   v-model="prompt3"
                   type="text"
@@ -333,7 +420,7 @@ const confirmLogout = async () => {
               <button
                 @click="handleCreateGame"
                 :disabled="loadingGame"
-                class="w-full bg-primary text-white font-semibold py-3 rounded-md transition-colors hover:bg-primary/90 disabled:opacity-50"
+                class="w-full bg-primary text-white font-semibold py-3 rounded-md transition-colors hover:bg-primary/90 disabled:opacity-50 cursor-pointer"
               >
                 {{ loadingGame ? 'Creating...' : 'Create and Start Game' }}
               </button>
@@ -357,7 +444,7 @@ const confirmLogout = async () => {
                   d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
                 />
               </svg>
-              <h2 class="text-lg font-semibold text-dark">Game Status</h2>
+              <h2 class="text-lg font-semibold text-dark-gray">Game Status</h2>
             </div>
             <p class="text-xs text-slate mb-4">
               Update the current status of the game for all players.
@@ -385,34 +472,71 @@ const confirmLogout = async () => {
                   d="M13 10V3L4 14h7v7l9-11h-7z"
                 />
               </svg>
-              <h2 class="text-lg font-semibold text-dark">
+              <h2 class="text-lg font-semibold text-dark-gray">
                 Fastest Submissions (Photos Unverified)
               </h2>
             </div>
             <p class="text-xs text-slate mb-4">
-              Live player rankings as they complete all prompts.
+              Live player rankings as they complete all 3 prompts.
             </p>
 
             <div v-if="leaderboard.length === 0" class="py-8 text-center text-slate text-sm">
-              No players have finished yet.
+              No players have completed all 3 prompts yet.
             </div>
-            <div v-else class="space-y-2">
+
+            <div v-else class="space-y-3">
               <div
-                v-for="entry in leaderboard.slice(0, 10)"
-                :key="entry.id"
-                class="flex items-center justify-between p-3 bg-soft rounded-md"
+                v-for="entry in leaderboard"
+                :key="entry.userId"
+                class="flex items-center justify-between p-4 rounded-lg transition-all"
+                :class="{
+                  'bg-yellow-50 border-2 border-yellow-400 shadow-lg': entry.rank === 1,
+                  'bg-gray-100 border-2 border-gray-400 shadow-md': entry.rank === 2,
+                  'bg-orange-50 border-2 border-orange-400 shadow-md': entry.rank === 3,
+                  'bg-soft': entry.rank > 3,
+                }"
               >
-                <div class="flex items-center gap-3">
-                  <span class="font-bold text-primary">{{ entry.rank }}</span>
-                  <span class="text-sm">{{ entry.instagramHandle }}</span>
-                  <span
-                    v-if="entry.allPhotosApproved"
-                    class="text-xs px-2 py-1 bg-green-100 text-green-700 rounded-full"
-                  >
-                    ✓ Verified
-                  </span>
+                <div class="flex items-center gap-4">
+                  <!-- Rank Badge -->
+                  <div class="flex-shrink-0">
+                    <div
+                      v-if="entry.rank === 1"
+                      class="w-12 h-12 bg-yellow-400 rounded-full flex items-center justify-center text-white font-bold text-xl shadow-lg"
+                    >
+                      1st
+                    </div>
+                    <div
+                      v-else-if="entry.rank === 2"
+                      class="w-10 h-10 bg-gray-400 rounded-full flex items-center justify-center text-white font-bold text-lg"
+                    >
+                      2nd
+                    </div>
+                    <div
+                      v-else-if="entry.rank === 3"
+                      class="w-10 h-10 bg-orange-600 rounded-full flex items-center justify-center text-white font-bold text-lg"
+                    >
+                      3rd
+                    </div>
+                    <div
+                      v-else
+                      class="w-8 h-8 bg-primary/20 rounded-full flex items-center justify-center text-primary font-bold text-sm"
+                    >
+                      {{ entry.rank }}
+                    </div>
+                  </div>
+
+                  <!-- Player Info -->
+                  <div>
+                    <p class="font-semibold text-dark-gray">{{ entry.instagramHandle }}</p>
+                    <p class="text-xs text-slate">Completed all 3 prompts</p>
+                  </div>
                 </div>
-                <span class="text-xs text-slate"> {{ Math.floor(entry.totalTime / 1000) }}s </span>
+
+                <!-- Time - Now with detailed format: 3m 16s 230ms -->
+                <div class="text-right">
+                  <p class="text-lg font-bold text-dark-gray">{{ entry.formattedTime }}</p>
+                  <p class="text-xs text-slate">completion time</p>
+                </div>
               </div>
             </div>
           </div>
@@ -428,7 +552,7 @@ const confirmLogout = async () => {
                   d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12zm-7 4h14M5 12a2 2 0 110-4h14a2 2 0 110 4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7"
                 />
               </svg>
-              <h2 class="text-lg font-semibold text-dark">Edit Prize</h2>
+              <h2 class="text-lg font-semibold text-dark-gray">Edit Prize</h2>
             </div>
             <p class="text-xs text-slate mb-4">
               Set the prize description and upload a logo. This will be visible to everyone.
@@ -436,7 +560,7 @@ const confirmLogout = async () => {
 
             <div class="space-y-4">
               <div>
-                <label class="block text-sm font-medium text-dark mb-2">Prize Logo</label>
+                <label class="block text-sm font-medium text-dark-gray mb-2">Prize Logo</label>
                 <div class="flex items-center gap-4">
                   <div
                     class="w-16 h-16 bg-soft rounded-md flex items-center justify-center overflow-hidden"
@@ -464,7 +588,7 @@ const confirmLogout = async () => {
                   </div>
                   <div>
                     <label
-                      class="flex items-center gap-2 px-4 py-2 bg-soft text-dark text-sm rounded-md cursor-pointer hover:bg-light transition"
+                      class="flex items-center gap-2 px-4 py-2 bg-soft text-dark-gray text-sm rounded-md cursor-pointer hover:bg-light transition"
                     >
                       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path
@@ -487,7 +611,9 @@ const confirmLogout = async () => {
                 </div>
               </div>
               <div>
-                <label class="block text-sm font-medium text-dark mb-2">Prize Description</label>
+                <label class="block text-sm font-medium text-dark-gray mb-2"
+                  >Prize Description</label
+                >
                 <textarea
                   v-model="prizeDescription"
                   placeholder="e.g., A $50 gift card to Starbucks"
@@ -529,13 +655,13 @@ const confirmLogout = async () => {
                   d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
                 />
               </svg>
-              <h2 class="text-lg font-semibold text-dark">Photo Submissions</h2>
+              <h2 class="text-lg font-semibold text-dark-gray">Photo Submissions</h2>
             </div>
             <div>
               <label class="block text-xs text-slate mb-1">Filter by User</label>
               <select
                 v-model="selectedUser"
-                class="px-4 py-2 bg-soft text-sm rounded-md border-0 focus:outline-none focus:ring-2 focus:ring-primary"
+                class="px-4 py-2 bg-soft text-sm rounded-md border-0 focus:outline-none focus:ring-2 focus:ring-primary cursor-pointer"
               >
                 <option v-for="user in users" :key="user" :value="user">
                   {{ user === 'All Users' ? 'All Users' : user }}
@@ -551,30 +677,33 @@ const confirmLogout = async () => {
           <!-- Tabs -->
           <div class="flex gap-4 border-b border-light mb-6">
             <button
+              class="cursor-pointer"
               @click="activeTab = 'pending'"
               :class="
                 activeTab === 'pending'
-                  ? 'border-b-2 border-dark text-dark font-medium'
+                  ? 'border-b-2 border-dark text-dark-gray font-medium'
                   : 'text-slate'
               "
             >
               Pending ({{ submissionCounts.pending }})
             </button>
             <button
+              class="cursor-pointer"
               @click="activeTab = 'approved'"
               :class="
                 activeTab === 'approved'
-                  ? 'border-b-2 border-dark text-dark font-medium'
+                  ? 'border-b-2 border-dark text-dark-gray font-medium'
                   : 'text-slate'
               "
             >
               Approved ({{ submissionCounts.approved }})
             </button>
             <button
+              class="cursor-pointer"
               @click="activeTab = 'rejected'"
               :class="
                 activeTab === 'rejected'
-                  ? 'border-b-2 border-dark text-dark font-medium'
+                  ? 'border-b-2 border-dark text-dark-gray font-medium'
                   : 'text-slate'
               "
             >
@@ -623,7 +752,7 @@ const confirmLogout = async () => {
             <p class="text-slate text-sm">No {{ activeTab }} submissions.</p>
           </div>
 
-          <div v-else class="space-y-4">
+          <div v-else class="grid grid-cols-2 gap-4">
             <div
               v-for="sub in currentSubmissions"
               :key="sub.id"
@@ -631,7 +760,7 @@ const confirmLogout = async () => {
             >
               <div class="flex justify-between items-start mb-3">
                 <div>
-                  <p class="font-bold text-dark">{{ sub.instagramHandle }}</p>
+                  <p class="font-bold text-dark-gray">{{ sub.instagramHandle }}</p>
                   <p class="text-xs text-slate">
                     Prompt {{ sub.promptIndex + 1 }} •
                     {{ sub.uploadedAt?.toDate?.().toLocaleString() || 'Just now' }}
@@ -642,13 +771,13 @@ const confirmLogout = async () => {
               <div v-if="sub.status === 'pending'" class="flex gap-3 mt-4">
                 <button
                   @click="handleApproveSubmission(sub.id)"
-                  class="flex-1 bg-green-600 text-white py-2 rounded hover:bg-green-700"
+                  class="flex-1 bg-green-600 text-white py-2 rounded hover:bg-green-700 cursor-pointer"
                 >
                   Approve
                 </button>
                 <button
                   @click="handleRejectSubmission(sub.id)"
-                  class="flex-1 bg-red-600 text-white py-2 rounded hover:bg-red-700"
+                  class="flex-1 bg-red-600 text-white py-2 rounded hover:bg-red-700 cursor-pointer"
                 >
                   Reject
                 </button>
@@ -667,19 +796,19 @@ const confirmLogout = async () => {
         @click.self="showLogoutModal = false"
       >
         <div class="bg-white rounded-lg shadow-2xl p-6 max-w-sm w-full">
-          <h3 class="text-lg font-semibold text-dark mb-2">Confirm Sign Out</h3>
+          <h3 class="text-lg font-semibold text-dark-gray mb-2">Confirm Sign Out</h3>
           <p class="text-sm text-slate mb-6">Are you sure you'd like to sign out?</p>
           <div class="flex gap-3 justify-end">
             <button
               @click="showLogoutModal = false"
-              class="px-4 py-2 text-sm font-medium text-dark bg-soft rounded-md"
+              class="px-4 py-2 text-sm font-medium text-dark-gray bg-soft rounded-md cursor-pointer"
             >
               Cancel
             </button>
             <button
               @click="confirmLogout"
               :disabled="isLoggingOut"
-              class="px-4 py-2 text-sm font-medium text-white rounded-md bg-primary disabled:opacity-50"
+              class="px-4 py-2 text-sm font-medium text-white rounded-md bg-primary disabled:opacity-50 cursor-pointer"
             >
               {{ isLoggingOut ? 'Signing out...' : 'Sign Out' }}
             </button>

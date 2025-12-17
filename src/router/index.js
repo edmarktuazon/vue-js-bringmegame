@@ -1,7 +1,8 @@
-// router/index.js – FINAL WORKING VERSION
+// src/router/index.js (or wherever your router file is)
+
 import { createRouter, createWebHistory } from 'vue-router'
 import HomeFormView from '../views/HomeFormView.vue'
-import { auth } from '/firebase/config'
+import { auth } from '/firebase/config' // Adjust path if needed
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -10,23 +11,29 @@ const router = createRouter({
       path: '/',
       name: 'home',
       component: HomeFormView,
+      // Walang meta requiresUser – public ito para makapag-create ng session
     },
     {
       path: '/game',
       name: 'game',
       component: () => import('../views/GameView.vue'),
-      meta: { requiresUser: true },
+      meta: { requiresUser: true }, // Protektado – kailangan ng player session
     },
     {
       path: '/admin',
       name: 'admin',
       component: () => import('../views/AdminView.vue'),
-      meta: { requiresAuth: true },
+      meta: { requiresAuth: true }, // Protektado – kailangan ng Firebase auth
+    },
+    // Optional: catch-all redirect para sa invalid routes
+    {
+      path: '/:pathMatch(.*)*',
+      redirect: '/',
     },
   ],
 })
 
-// Helper para sa Firebase Auth
+// Helper para kunin ang current Firebase user
 const getCurrentUser = () => {
   return new Promise((resolve) => {
     const unsubscribe = auth.onAuthStateChanged((user) => {
@@ -36,44 +43,35 @@ const getCurrentUser = () => {
   })
 }
 
-// ROUTE GUARD – FIXED VERSION
 router.beforeEach(async (to, from, next) => {
   console.log('Navigating to:', to.path)
   console.log('From:', from.path)
 
+  // 1. Check kung admin route (Firebase Auth)
   const requiresAuth = to.matched.some((record) => record.meta.requiresAuth)
-  const requiresUser = to.matched.some((record) => record.meta.requiresUser)
-
-  console.log('Requires Auth:', requiresAuth)
-  console.log('Requires User:', requiresUser)
-
-  // ADMIN AUTH (Firebase Auth)
   if (requiresAuth) {
     const user = await getCurrentUser()
     if (user) {
-      next()
+      next() // May Firebase user → pasok sa admin
     } else {
-      next('/')
+      next('/') // Walang Firebase user → balik sa home
     }
     return
   }
 
-  // PLAYER SESSION (localStorage)
+  // 2. Check kung player route (localStorage session)
+  const requiresUser = to.matched.some((record) => record.meta.requiresUser)
   if (requiresUser) {
-    // IMPORTANT: Use synchronous check – localStorage is sync!
     const session = localStorage.getItem('bmg_user')
-
     if (session) {
-      console.log('Player session found:', session)
-      next()
+      next() // May session → pasok sa game
     } else {
-      console.log('No player session – redirecting to home')
-      next('/')
+      next('/') // Walang session → balik sa home para mag-fill up
     }
     return
   }
 
-  // Public route
+  // 3. Lahat ng iba (public routes tulad ng home)
   next()
 })
 

@@ -1,4 +1,3 @@
-<!-- HeaderFormModal.vue -->
 <script setup>
 import BMGLogo from '/BMG-Logo.png'
 import { ref } from 'vue'
@@ -117,8 +116,8 @@ const handleSubmit = async (e) => {
               </svg>
             </button>
             <!-- User form login-->
-            <div class="flex items-center flex-col px-6 pt-6 pb-4 space-y-6">
-              <img :src="BMGLogo" class="w-48 h-24.25" alt="Bring Me Game Logo" />
+            <div class="flex items-center flex-col px-6 pt-6">
+              <img :src="BMGLogo" class="w-48 h-24.25 mb-10" alt="Bring Me Game Logo" />
               <p class="text-sm text-dark-gray">
                 <strong>Note:</strong> Admin access only. If you're Admin, please enter the correct
                 given username and password.

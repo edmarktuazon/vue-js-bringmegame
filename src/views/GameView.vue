@@ -1,18 +1,62 @@
 <script setup>
-import { ref, onMounted, computed, onUnmounted } from 'vue'
+import { ref, onMounted, computed, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { getActiveGame, getUserSubmissions, submitPhoto } from '/firebase/gameHelpers'
+import {
+  getActiveGame,
+  getUserSubmissions,
+  submitPhoto,
+  getUserCompletionTime,
+} from '/firebase/gameHelpers'
 import { db } from '/firebase/config'
 import { collection, query, where, onSnapshot, orderBy } from 'firebase/firestore'
 
+import NavigationGame from '../components/game/NavigationGame.vue'
+import CountdownOverlay from '../components/game/CountdownOverlay.vue'
+import LiveFeed from '../components/game/LiveFeed.vue'
+import ActiveActualGame from '../components/game/ActiveActualGame.vue'
+import GameEnded from '../components/game/GameEnded.vue'
+import ExitGameModal from '../components/game/ExitGameModal.vue'
+import CompletionModal from '../components/game/CompletionModal.vue'
+
+// routes
 const router = useRouter()
 
+// Player
 const user = ref(null)
+
+// Actual game
 const game = ref(null)
+
+// Submission
 const submissions = ref({})
+
+// Loading state
 const loading = ref(true)
+
+// Prompt uploading
 const uploadingPrompt = ref(null)
+
+// Selected photo
+const selectedPhotoFile = ref(null)
+
+// Live users
 const liveFeed = ref([])
+
+const showExitGameModal = ref(false)
+const isLoggingOut = ref(false)
+
+// Countdown state
+const showCountdown = ref(false)
+const countdown = ref(30)
+const countdownInterval = ref(null)
+
+// Timer state
+
+const timerInterval = ref(null)
+
+// Completion modal
+const showCompletionModal = ref(false)
+const completionTime = ref(null)
 
 let unsubscribeGame = null
 let unsubscribeFeed = null
@@ -25,6 +69,16 @@ onMounted(async () => {
   }
 
   user.value = JSON.parse(userStr)
+
+  // Sign in anonymously to enable Firebase Storage uploads
+  try {
+    const { signInAnonymously } = await import('firebase/auth')
+    const { auth } = await import('/firebase/config')
+    await signInAnonymously(auth)
+    console.log('✅ Anonymous auth successful')
+  } catch (error) {
+    console.error('Auth error:', error)
+  }
 
   try {
     game.value = await getActiveGame()
@@ -39,6 +93,11 @@ onMounted(async () => {
 
     setupGameListener()
     setupLiveFeedListener()
+
+    if (game.value.status === 'active') {
+      startCountdown()
+    }
+
     loading.value = false
   } catch (error) {
     console.error('Error loading game:', error)
@@ -50,8 +109,54 @@ onMounted(async () => {
 onUnmounted(() => {
   if (unsubscribeGame) unsubscribeGame()
   if (unsubscribeFeed) unsubscribeFeed()
+  if (countdownInterval.value) clearInterval(countdownInterval.value)
+  if (timerInterval.value) clearInterval(timerInterval.value)
 })
 
+// Watch for game status change to active
+watch(
+  () => game.value?.status,
+  (newStatus, oldStatus) => {
+    if (oldStatus === 'waiting' && newStatus === 'active') {
+      startCountdown()
+    }
+  },
+)
+
+// Game countdown
+const startCountdown = () => {
+  showCountdown.value = true
+  countdown.value = 30
+
+  countdownInterval.value = setInterval(() => {
+    countdown.value--
+    if (countdown.value <= 0) {
+      clearInterval(countdownInterval.value)
+      showCountdown.value = false
+    }
+  }, 1000)
+}
+
+// Checking of completion of prompt
+const checkCompletion = async () => {
+  const submittedCount = Object.keys(submissions.value).length
+
+  if (submittedCount === 3 && game.value?.id && user.value?.id) {
+    if (timerInterval.value) {
+      clearInterval(timerInterval.value)
+    }
+
+    // Get completion time from server
+    const result = await getUserCompletionTime(game.value.id, user.value.id)
+
+    if (result) {
+      completionTime.value = result
+      showCompletionModal.value = true
+    }
+  }
+}
+
+// Snapshot of game
 const setupGameListener = () => {
   if (!game.value) return
   const q = query(collection(db, 'games'), where('isActive', '==', true))
@@ -63,6 +168,7 @@ const setupGameListener = () => {
   })
 }
 
+// User live feed
 const setupLiveFeedListener = () => {
   const q = query(
     collection(db, 'users'),
@@ -83,8 +189,18 @@ const nextPromptIndex = computed(() => {
   return null
 })
 
-const handlePhotoUpload = async (promptIndex, file) => {
+// Handling photo upload
+const handlePhotoSelect = (promptIndex, e) => {
+  const file = e.target.files[0]
   if (!file) return
+  selectedPhotoFile.value = file
+  handlePhotoUpload(promptIndex)
+}
+
+// Handling photo upload
+const handlePhotoUpload = async (promptIndex) => {
+  if (!selectedPhotoFile.value) return
+
   uploadingPrompt.value = promptIndex
 
   try {
@@ -94,19 +210,25 @@ const handlePhotoUpload = async (promptIndex, file) => {
       user.value.id,
       user.value.instagramHandle,
       promptIndex,
-      file,
+      selectedPhotoFile.value,
     )
     console.log('Upload done:', url)
 
-    // Refresh submissions
     submissions.value = await getUserSubmissions(game.value.id, user.value.id)
+
+    selectedPhotoFile.value = null
+
+    // Check if all prompts completed
+    await checkCompletion()
   } catch (error) {
     console.error('Upload failed:', error)
+    alert('Upload failed. Please try again.')
   } finally {
     uploadingPrompt.value = null
   }
 }
 
+// Logout session
 const handleLogout = () => {
   localStorage.removeItem('bmg_user')
   router.push('/')
@@ -114,21 +236,11 @@ const handleLogout = () => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-soft font-montserrat">
-    <header class="bg-white shadow-xl px-4 py-6 sticky top-0 z-10">
-      <div class="flex justify-between items-center w-full max-w-4xl mx-auto">
-        <div>
-          <span class="text-xl font-bold">Bring<span class="text-primary">Me</span></span>
-          <p class="text-xs text-slate mt-1">{{ user?.instagramHandle }}</p>
-        </div>
-        <button @click="handleLogout" class="text-sm text-slate hover:text-dark transition">
-          Exit Game
-        </button>
-      </div>
-    </header>
+  <main class="main min-h-screen bg-soft font-montserrat">
+    <NavigationGame @open-exit-modal="showExitGameModal = true" />
 
-    <main class="max-w-4xl mx-auto px-4 py-8">
-      <!-- Loading -->
+    <!-- Loading state -->
+    <div class="max-w-4xl mx-auto px-4 py-8">
       <div v-if="loading" class="flex items-center justify-center py-20">
         <div class="text-center">
           <svg
@@ -154,14 +266,22 @@ const handleLogout = () => {
         </div>
       </div>
 
-      <!-- Waiting or Starting State -->
+      <!-- Countdown state -->
+      <CountdownOverlay
+        v-else-if="showCountdown && game?.status === 'active'"
+        :countdown="countdown"
+      />
+
+      <!-- Waiting state -->
       <div
         v-else-if="game?.status === 'waiting' || game?.status === 'starting'"
         class="grid grid-cols-1 lg:grid-cols-3 gap-6"
       >
         <div class="lg:col-span-2">
           <div class="bg-white rounded-lg shadow-sm p-8 text-center">
-            <h2 class="text-2xl font-bold text-dark mb-2">Welcome, {{ user?.instagramHandle }}!</h2>
+            <h2 class="text-2xl font-bold text-dark-gray mb-2">
+              Welcome, {{ user?.instagramHandle }}!
+            </h2>
             <div class="bg-primary/10 border-2 border-primary rounded-lg p-6 my-6">
               <div class="flex items-center justify-center gap-3 mb-3">
                 <svg
@@ -200,156 +320,55 @@ const handleLogout = () => {
             </p>
           </div>
         </div>
-
-        <!-- Live Feed -->
         <div class="lg:col-span-1">
-          <div class="bg-white rounded-lg shadow-sm p-6">
-            <div class="flex items-center gap-2 mb-4">
-              <svg
-                class="w-5 h-5 text-primary"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
-                />
-              </svg>
-              <h3 class="font-semibold text-dark">Live Feed</h3>
-            </div>
-            <p class="text-xs text-slate mb-4">Users who have joined the game.</p>
-            <div v-if="liveFeed.length === 0" class="text-center py-8 text-slate text-sm">
-              No users yet.
-            </div>
-            <div v-else class="space-y-2 max-h-96 overflow-y-auto">
-              <div
-                v-for="feedUser in liveFeed"
-                :key="feedUser.id"
-                class="flex items-center gap-2 p-2 bg-soft rounded-md"
-              >
-                <div class="w-8 h-8 bg-primary/20 rounded-full flex items-center justify-center">
-                  <span class="text-primary font-bold text-xs">{{
-                    feedUser.instagramHandle.charAt(1).toUpperCase()
-                  }}</span>
-                </div>
-                <span class="text-sm text-dark">{{ feedUser.instagramHandle }}</span>
-              </div>
-            </div>
-          </div>
+          <LiveFeed :live-feed="liveFeed" />
         </div>
       </div>
 
-      <!-- Game Ended -->
-      <div
-        v-else-if="game?.status === 'ended'"
-        class="bg-white rounded-lg shadow-sm p-8 text-center"
-      >
-        <h2 class="text-2xl font-bold text-dark mb-2">Game Has Ended</h2>
-        <p class="text-slate mb-6">
-          This game has concluded. Thank you for participating! Winners will be contacted via
-          Instagram.
-        </p>
-        <button
-          @click="handleLogout"
-          class="px-6 py-3 bg-primary text-white font-semibold rounded-md hover:bg-primary/90 transition"
-        >
-          Exit Game
-        </button>
-      </div>
+      <!-- Active game -->
+      <ActiveActualGame
+        v-else-if="game?.status === 'active' && !showCountdown"
+        :game="game"
+        :user="user"
+        :submissions="submissions"
+        :next-prompt-index="nextPromptIndex"
+        :uploading-prompt="uploadingPrompt"
+        @photo-select="handlePhotoSelect"
+      />
 
-      <!-- Active Game -->
-      <div v-else>
-        <div v-if="game?.prize?.description" class="bg-white rounded-lg shadow-sm p-6 mb-6">
-          <div class="flex items-center gap-4">
-            <img
-              v-if="game.prize.logoUrl"
-              :src="game.prize.logoUrl"
-              alt="Prize"
-              class="w-16 h-16 object-cover rounded-md"
-            />
-            <div class="flex-1">
-              <h3 class="text-sm font-semibold text-dark mb-1">🏆 Prize</h3>
-              <p class="text-sm text-slate">{{ game.prize.description }}</p>
-            </div>
-          </div>
-        </div>
+      <!-- End game -->
+      <GameEnded v-else-if="game?.status === 'ended'" @logout="handleLogout" />
+    </div>
 
-        <!-- Progress bar -->
-        <div class="bg-gray-200 rounded-full h-4 mb-6 overflow-hidden">
-          <div
-            class="bg-primary h-4 transition-all"
-            :style="{
-              width: `${(Object.keys(submissions.value || {}).length / (game.prompts?.length || 1)) * 100}%`,
-            }"
-          ></div>
-        </div>
+    <!-- Exit game modal -->
 
-        <!-- Prompt Uploads -->
-        <div v-if="nextPromptIndex !== null" class="space-y-4">
-          <div class="bg-white rounded-lg shadow-sm p-6">
-            <h3 class="text-lg font-semibold text-dark mb-2">Prompt {{ nextPromptIndex + 1 }}</h3>
-            <p class="text-sm text-slate">{{ game.prompts[nextPromptIndex] }}</p>
+    <ExitGameModal
+      v-model="showExitGameModal"
+      :is-logging-out="isLoggingOut"
+      @confirm="handleLogout"
+    />
 
-            <label
-              :class="[
-                'flex items-center justify-center gap-2 w-full px-4 py-3 border-2 border-dashed rounded-md cursor-pointer transition mt-4',
-                uploadingPrompt === nextPromptIndex
-                  ? 'border-primary bg-primary/5'
-                  : 'border-slate hover:border-primary hover:bg-primary/5',
-              ]"
-            >
-              <svg
-                v-if="uploadingPrompt !== nextPromptIndex"
-                class="w-5 h-5 text-slate"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
-                />
-              </svg>
-              <svg v-else class="w-5 h-5 text-primary animate-spin" fill="none" viewBox="0 0 24 24">
-                <circle
-                  class="opacity-25"
-                  cx="12"
-                  cy="12"
-                  r="10"
-                  stroke="currentColor"
-                  stroke-width="4"
-                ></circle>
-                <path
-                  class="opacity-75"
-                  fill="currentColor"
-                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                ></path>
-              </svg>
-              <span :class="uploadingPrompt === nextPromptIndex ? 'text-primary' : 'text-slate'">
-                {{ uploadingPrompt === nextPromptIndex ? 'Uploading...' : 'Upload Photo' }}
-              </span>
-              <input
-                type="file"
-                accept="image/*"
-                class="hidden"
-                :disabled="uploadingPrompt === nextPromptIndex"
-                @change="handlePhotoUpload(nextPromptIndex, $event)"
-              />
-            </label>
-          </div>
-        </div>
-
-        <div v-else class="bg-primary/10 border-2 border-primary rounded-lg p-4 mb-6">
-          <p class="text-primary font-semibold text-center">
-            🎉 All prompts completed! Your submission is under review.
-          </p>
-        </div>
-      </div>
-    </main>
-  </div>
+    <!-- Final completion -->
+    <CompletionModal
+      v-model="showCompletionModal"
+      :completion-time="completionTime"
+      :is-logging-out="isLoggingOut"
+      @exit="handleLogout"
+    />
+  </main>
 </template>
+
+<style>
+.main {
+  background-image: radial-gradient(circle, hsl(270 50% 88%) 0.125rem, transparent 0.125rem);
+  background-size: 1.25rem 1.25rem;
+}
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+</style>
