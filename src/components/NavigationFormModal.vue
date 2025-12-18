@@ -1,4 +1,5 @@
 <script setup>
+import BMGLogo from '/BMG-Logo.png'
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { auth } from '/firebase/config'
@@ -34,19 +35,16 @@ const handleSubmit = async (e) => {
 
   try {
     const email = `${username.value}@bmg.com`
-    console.log('🔐 Attempting login with:', email)
 
     const userCredential = await signInWithEmailAndPassword(auth, email, password.value)
 
-    console.log('✅ Login successful:', userCredential.user.email)
+    console.log('Login successful:', userCredential.user.email)
 
     closeModal()
 
     await new Promise((resolve) => setTimeout(resolve, 100))
 
-    console.log('🚀 Navigating to /admin...')
     await router.push('/admin')
-    console.log('✅ Navigation complete')
   } catch (error) {
     console.error('❌ Login error:', error.code, error.message)
     switch (error.code) {

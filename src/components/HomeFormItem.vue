@@ -1,9 +1,9 @@
 <script setup>
+import BMGLogo from '/BMG-Logo.png'
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { doc, onSnapshot } from 'firebase/firestore'
 import { db } from '/firebase/config'
-import BMGLogo from '/BMG-Logo.png'
 import { createUser, getActiveGame, updateUserCurrentGame } from '/firebase/gameHelpers'
 
 const router = useRouter()

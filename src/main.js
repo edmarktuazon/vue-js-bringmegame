@@ -10,5 +10,3 @@ const app = createApp(App)
 app.use(router)
 
 app.mount('#app')
-
-console.log('✅ App mounted with router')

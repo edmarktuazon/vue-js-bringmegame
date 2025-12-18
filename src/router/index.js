@@ -40,9 +40,6 @@ const getCurrentUser = () => {
 }
 
 router.beforeEach(async (to, from, next) => {
-  console.log('Navigating to:', to.path)
-  console.log('From:', from.path)
-
   const requiresAuth = to.matched.some((record) => record.meta.requiresAuth)
   if (requiresAuth) {
     const user = await getCurrentUser()

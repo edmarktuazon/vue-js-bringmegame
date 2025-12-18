@@ -76,8 +76,6 @@ const setupCurrentGameListener = () => {
   }
 
   unsubscribeSubs = listenToSubmissions(currentGame.value.id, (subs) => {
-    console.log('🔥 Real-time submissions update:', subs.length, 'items')
-
     allSubmissions.value = subs
     updateLeaderboard()
     updateUsersList(subs)
