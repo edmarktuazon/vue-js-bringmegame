@@ -1,13 +1,12 @@
 <script setup>
+import BMGLogo from '/BMG-Logo.png'
 const emit = defineEmits(['open-exit-modal'])
 </script>
 
 <template>
   <header class="bg-white shadow-xl px-4 py-6 sticky top-0 z-10">
     <div class="flex justify-between items-center w-full max-w-4xl mx-auto">
-      <div>
-        <span class="text-xl font-bold">Bring<span class="text-primary">Me</span></span>
-      </div>
+      <img :src="BMGLogo" class="w-32 h-16" alt="Bring Me Game Logo" />
       <button
         @click="emit('open-exit-modal')"
         class="flex items-center gap-1 text-dark-gray-gray transition cursor-pointer text-dark-gray"

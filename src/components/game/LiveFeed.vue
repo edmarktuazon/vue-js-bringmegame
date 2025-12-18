@@ -17,6 +17,7 @@ defineProps({
       </svg>
       <h3 class="font-semibold text-dark-gray">Live Feed</h3>
     </div>
+
     <p class="text-xs text-slate mb-4">Users who have joined the game.</p>
     <div v-if="liveFeed.length === 0" class="text-center py-8 text-slate text-sm">
       No users yet.
