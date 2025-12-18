@@ -219,11 +219,9 @@ export const updateUserCurrentGame = async (userId, gameId) => {
 
 export const getUserSubmissions = async (gameId, userId) => {
   try {
-    console.log('Getting user submissions...', { gameId, userId })
     const q = query(collection(db, 'games', gameId, 'submissions'), where('userId', '==', userId))
 
     const snapshot = await getDocs(q)
-    console.log('Found submissions:', snapshot.size)
 
     const result = {}
 
@@ -235,7 +233,6 @@ export const getUserSubmissions = async (gameId, userId) => {
       }
     })
 
-    console.log('Processed submissions:', result)
     return result
   } catch (error) {
     console.error('Error getting user submissions:', error)

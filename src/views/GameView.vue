@@ -163,7 +163,6 @@ const setupGameListener = () => {
   unsubscribeGame = onSnapshot(q, (snapshot) => {
     if (!snapshot.empty) {
       game.value = { id: snapshot.docs[0].id, ...snapshot.docs[0].data() }
-      console.log('🔄 Game updated:', game.value.status)
     }
   })
 }
@@ -277,7 +276,7 @@ const handleLogout = () => {
         v-else-if="game?.status === 'waiting' || game?.status === 'starting'"
         class="grid grid-cols-1 lg:grid-cols-3 gap-6"
       >
-        <div class="lg:col-span-2">
+        <div class="grid gap-6 lg:col-span-2">
           <div class="bg-white rounded-lg shadow-sm p-8 text-center">
             <h2 class="text-2xl font-bold text-dark-gray mb-2">
               Welcome, {{ user?.instagramHandle }}!
@@ -319,22 +318,29 @@ const handleLogout = () => {
               upload your photos!
             </p>
           </div>
+          <!-- Prize -->
+          <div v-if="game?.prize" class="bg-white rounded-lg shadow-sm p-6 mb-6">
+            <h3 class="text-lg font-semibold text-dark-gray mb-4 text-center">Today's Prize</h3>
+            <div class="flex flex-col items-center gap-4">
+              <div
+                v-if="game.prize.logoUrl"
+                class="w-32 h-32 rounded-full overflow-hidden shadow-lg"
+              >
+                <img
+                  :src="game.prize.logoUrl"
+                  alt="Prize logo"
+                  class="w-full h-full object-cover"
+                />
+              </div>
+              <p class="text-center text-dark-gray font-medium max-w-md">
+                {{ game.prize.description || 'Amazing prize awaits the fastest player!' }}
+              </p>
+            </div>
+          </div>
         </div>
 
         <div class="lg:col-span-1">
           <LiveFeed :live-feed="liveFeed" />
-        </div>
-        <!-- Prize -->
-        <div v-if="game?.prize" class="bg-white rounded-lg shadow-sm p-6 mb-6">
-          <h3 class="text-lg font-semibold text-dark-gray mb-4 text-center">Today's Prize</h3>
-          <div class="flex flex-col items-center gap-4">
-            <div v-if="game.prize.logoUrl" class="w-32 h-32 rounded-full overflow-hidden shadow-lg">
-              <img :src="game.prize.logoUrl" alt="Prize logo" class="w-full h-full object-cover" />
-            </div>
-            <p class="text-center text-dark-gray font-medium max-w-md">
-              {{ game.prize.description || 'Amazing prize awaits the fastest player!' }}
-            </p>
-          </div>
         </div>
       </div>
 
