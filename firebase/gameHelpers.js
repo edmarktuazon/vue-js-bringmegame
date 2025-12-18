@@ -25,57 +25,32 @@ export const submitPhoto = async (gameId, userId, instagramHandle, promptIndex, 
   try {
     if (!file) throw new Error('No file selected')
 
-    console.log('📸 Starting upload:', {
-      fileName: file.name,
-      fileType: file.type,
-      fileSize: file.size,
-    })
+    console.log('Raw file received:', file.name, file.size, file.type)
 
-    // Ensure Firebase Auth is ready
-    const { auth } = await import('/firebase/config')
-    const { signInAnonymously } = await import('firebase/auth')
+    // Critical fix for mobile: Force correct Blob with JPEG type
+    let uploadBlob = file
 
-    if (!auth.currentUser) {
-      console.log('🔐 No auth user, signing in...')
-      await signInAnonymously(auth)
-      console.log('✅ Auth successful')
-    }
+    // Android Chrome + capture often gives empty or wrong type
+    if (!file.type || file.type === '' || !file.type.startsWith('image/')) {
+      console.log('Fixing MIME type for mobile...')
 
-    // Convert file to blob with proper MIME type
-    let uploadBlob
-
-    if (file.type && file.type.startsWith('image/')) {
-      // File already has proper MIME type
-      uploadBlob = file
-    } else {
-      // Mobile devices sometimes don't set type, so we read and create new blob
+      // Read as ArrayBuffer then create new Blob with correct type
       const arrayBuffer = await file.arrayBuffer()
       uploadBlob = new Blob([arrayBuffer], { type: 'image/jpeg' })
     }
 
-    // Generate unique filename with timestamp
+    // Unique filename to avoid conflicts
     const timestamp = Date.now()
     const fileName = `prompt_${promptIndex}_${timestamp}.jpg`
     const imgRef = storageRef(storage, `submissions/${gameId}/${userId}/${fileName}`)
 
-    console.log('📤 Uploading to:', imgRef.fullPath)
-
     // Upload with explicit metadata
-    const metadata = {
+    await uploadBytes(imgRef, uploadBlob, {
       contentType: 'image/jpeg',
-      customMetadata: {
-        userId: userId,
-        gameId: gameId,
-        promptIndex: promptIndex.toString(),
-        uploadedFrom: 'mobile',
-      },
-    }
-
-    await uploadBytes(imgRef, uploadBlob, metadata)
-    console.log('✅ Upload successful')
+    })
 
     const photoUrl = await getDownloadURL(imgRef)
-    console.log('✅ Got download URL:', photoUrl)
+    console.log('Upload successful:', photoUrl)
 
     // Save to Firestore
     const submissionRef = doc(db, 'games', gameId, 'submissions', `${userId}_${promptIndex}`)
@@ -95,22 +70,19 @@ export const submitPhoto = async (gameId, userId, instagramHandle, promptIndex, 
       { merge: true },
     )
 
-    console.log('✅ Firestore save successful')
     return photoUrl
   } catch (error) {
-    console.error('❌ Upload failed:', error)
+    console.error('Upload failed completely:', error)
     console.error('Error code:', error.code)
     console.error('Error message:', error.message)
     throw error
   }
 }
-
 export const getActiveGame = async () => {
   try {
     const q = query(collection(db, 'games'), where('isActive', '==', true), limit(1))
     const snapshot = await getDocs(q)
     if (snapshot.empty) {
-      console.log('⚠️ No active game found')
       return null
     }
     const gameDoc = snapshot.docs[0]
@@ -151,8 +123,6 @@ export const createGame = async (prompts, createdByEmail) => {
     batch.set(newGameRef, newGameData)
     await batch.commit()
 
-    console.log('✅ New game created and STARTED:', newGameRef.id)
-
     return {
       id: newGameRef.id,
       ...newGameData,
@@ -180,7 +150,6 @@ export const updateGameStatus = async (gameId, newStatus) => {
   }
 
   await updateDoc(gameRef, { status: newStatus })
-  console.log('Status updated to:', newStatus)
 }
 
 export const updatePrize = async (gameId, description, logoFile) => {
@@ -197,7 +166,6 @@ export const updatePrize = async (gameId, description, logoFile) => {
       ...(logoUrl ? { 'prize.logoUrl': logoUrl } : {}),
     })
 
-    console.log('Prize updated')
     return logoUrl
   } catch (error) {
     console.error('Error updating prize:', error)
@@ -228,7 +196,6 @@ export const createUser = async (instagramHandle) => {
     }
 
     await setDoc(userRef, userData)
-    console.log('User created:', userRef.id)
     return { id: userRef.id, ...userData }
   } catch (error) {
     console.error('Error creating user:', error)
@@ -315,7 +282,6 @@ export const getAllSubmissions = (callback) => {
       return timeB - timeA
     })
 
-    console.log(`✅ Real-time update: ${allSubmissions.length} submissions`)
     callback(allSubmissions)
   })
 }
@@ -342,8 +308,6 @@ export const listenToSubmissions = (gameId, callback) => {
 
 export const updateSubmissionStatus = async (gameId, submissionId, status, adminEmail) => {
   try {
-    console.log('🔄 Attempting to update submission:', { gameId, submissionId, status })
-
     if (!gameId || !submissionId) {
       throw new Error('Missing gameId or submissionId')
     }

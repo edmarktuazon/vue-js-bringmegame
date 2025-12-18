@@ -18,21 +18,43 @@ import GameEnded from '../components/game/GameEnded.vue'
 import ExitGameModal from '../components/game/ExitGameModal.vue'
 import CompletionModal from '../components/game/CompletionModal.vue'
 
+// routes
 const router = useRouter()
 
+// Player
 const user = ref(null)
+
+// Actual game
 const game = ref(null)
+
+// Submission
 const submissions = ref({})
+
+// Loading state
 const loading = ref(true)
+
+// Prompt uploading
 const uploadingPrompt = ref(null)
+
+// Selected photo
 const selectedPhotoFile = ref(null)
+
+// Live users
 const liveFeed = ref([])
+
 const showExitGameModal = ref(false)
 const isLoggingOut = ref(false)
+
+// Countdown state
 const showCountdown = ref(false)
 const countdown = ref(30)
 const countdownInterval = ref(null)
+
+// Timer state
+
 const timerInterval = ref(null)
+
+// Completion modal
 const showCompletionModal = ref(false)
 const completionTime = ref(null)
 
@@ -48,21 +70,13 @@ onMounted(async () => {
 
   user.value = JSON.parse(userStr)
 
-  // CRITICAL: Sign in FIRST before doing anything else
+  // Sign in anonymously to enable Firebase Storage uploads
   try {
     const { signInAnonymously } = await import('firebase/auth')
     const { auth } = await import('/firebase/config')
-
-    console.log('🔐 Authenticating...')
     await signInAnonymously(auth)
-    console.log('✅ Authentication successful, user:', auth.currentUser.uid)
-
-    // Add small delay to ensure auth propagates
-    await new Promise((resolve) => setTimeout(resolve, 500))
   } catch (error) {
-    console.error('❌ Auth error:', error)
-    alert('Authentication failed. Please refresh and try again.')
-    return
+    console.error('Auth error:', error)
   }
 
   try {
@@ -98,6 +112,7 @@ onUnmounted(() => {
   if (timerInterval.value) clearInterval(timerInterval.value)
 })
 
+// Watch for game status change to active
 watch(
   () => game.value?.status,
   (newStatus, oldStatus) => {
@@ -107,6 +122,7 @@ watch(
   },
 )
 
+// Game countdown
 const startCountdown = () => {
   showCountdown.value = true
   countdown.value = 30
@@ -120,6 +136,7 @@ const startCountdown = () => {
   }, 1000)
 }
 
+// Checking of completion of prompt
 const checkCompletion = async () => {
   const submittedCount = Object.keys(submissions.value).length
 
@@ -128,6 +145,7 @@ const checkCompletion = async () => {
       clearInterval(timerInterval.value)
     }
 
+    // Get completion time from server
     const result = await getUserCompletionTime(game.value.id, user.value.id)
 
     if (result) {
@@ -137,6 +155,7 @@ const checkCompletion = async () => {
   }
 }
 
+// Snapshot of game
 const setupGameListener = () => {
   if (!game.value) return
   const q = query(collection(db, 'games'), where('isActive', '==', true))
@@ -147,6 +166,7 @@ const setupGameListener = () => {
   })
 }
 
+// User live feed
 const setupLiveFeedListener = () => {
   const q = query(
     collection(db, 'users'),
@@ -158,6 +178,7 @@ const setupLiveFeedListener = () => {
   })
 }
 
+// Index of the next prompt user should upload
 const nextPromptIndex = computed(() => {
   if (!game.value || !submissions.value) return 0
   for (let i = 0; i < game.value.prompts.length; i++) {
@@ -166,36 +187,19 @@ const nextPromptIndex = computed(() => {
   return null
 })
 
-const handlePhotoSelect = async (promptIndex, e) => {
+// Handling photo upload
+const handlePhotoSelect = (promptIndex, e) => {
   const file = e.target.files[0]
-  if (!file) {
-    console.log('❌ No file selected')
-    return
-  }
-
-  console.log('📸 File selected:', {
-    name: file.name,
-    type: file.type,
-    size: file.size,
-  })
-
+  if (!file) return
   selectedPhotoFile.value = file
-
-  // Start upload immediately
-  await handlePhotoUpload(promptIndex)
-
-  // Reset input to allow same file selection again
-  e.target.value = ''
+  handlePhotoUpload(promptIndex)
 }
 
+// Handling photo upload
 const handlePhotoUpload = async (promptIndex) => {
-  if (!selectedPhotoFile.value) {
-    console.log('❌ No file to upload')
-    return
-  }
+  if (!selectedPhotoFile.value) return
 
   uploadingPrompt.value = promptIndex
-  console.log('🚀 Starting upload for prompt:', promptIndex)
 
   try {
     const url = await submitPhoto(
@@ -205,42 +209,23 @@ const handlePhotoUpload = async (promptIndex) => {
       promptIndex,
       selectedPhotoFile.value,
     )
-    console.log('✅ Upload complete:', url)
+    console.log('Upload done:', url)
 
-    // Refresh submissions
     submissions.value = await getUserSubmissions(game.value.id, user.value.id)
-    console.log('✅ Submissions refreshed')
 
     selectedPhotoFile.value = null
 
-    // Check completion
+    // Check if all prompts completed
     await checkCompletion()
   } catch (error) {
-    console.error('❌ Upload failed:', error)
-    console.error('Error details:', {
-      code: error.code,
-      message: error.message,
-      stack: error.stack,
-    })
-
-    let errorMessage = 'Upload failed. '
-
-    if (error.code === 'storage/unauthorized') {
-      errorMessage += 'Authentication issue. Please refresh the page and try again.'
-    } else if (error.code === 'storage/canceled') {
-      errorMessage += 'Upload was canceled.'
-    } else if (error.code === 'storage/unknown') {
-      errorMessage += 'Network error. Please check your connection.'
-    } else {
-      errorMessage += error.message || 'Please try again.'
-    }
-
-    alert(errorMessage)
+    console.error('Upload failed:', error)
+    alert('Upload failed. Please try again.')
   } finally {
     uploadingPrompt.value = null
   }
 }
 
+// Logout session
 const handleLogout = () => {
   localStorage.removeItem('bmg_user')
   router.push('/')
@@ -251,6 +236,7 @@ const handleLogout = () => {
   <main class="main min-h-screen bg-soft font-montserrat">
     <NavigationGame @open-exit-modal="showExitGameModal = true" />
 
+    <!-- Loading state -->
     <div class="max-w-4xl mx-auto px-4 py-8">
       <div v-if="loading" class="flex items-center justify-center py-20">
         <div class="text-center">
@@ -277,11 +263,13 @@ const handleLogout = () => {
         </div>
       </div>
 
+      <!-- Countdown state -->
       <CountdownOverlay
         v-else-if="showCountdown && game?.status === 'active'"
         :countdown="countdown"
       />
 
+      <!-- Waiting state -->
       <div
         v-else-if="game?.status === 'waiting' || game?.status === 'starting'"
         class="grid grid-cols-1 lg:grid-cols-3 gap-6"
@@ -328,7 +316,7 @@ const handleLogout = () => {
               upload your photos!
             </p>
           </div>
-
+          <!-- Prize -->
           <div v-if="game?.prize" class="bg-white rounded-lg shadow-sm p-6">
             <h3 class="text-lg font-semibold text-dark-gray mb-4 text-center">Today's Prize</h3>
             <div class="flex flex-col items-center gap-4">
@@ -354,6 +342,7 @@ const handleLogout = () => {
         </div>
       </div>
 
+      <!-- Active game -->
       <ActiveActualGame
         v-else-if="game?.status === 'active' && !showCountdown"
         :game="game"
@@ -364,8 +353,11 @@ const handleLogout = () => {
         @photo-select="handlePhotoSelect"
       />
 
+      <!-- End game -->
       <GameEnded v-else-if="game?.status === 'ended'" @logout="handleLogout" />
     </div>
+
+    <!-- Exit game modal -->
 
     <ExitGameModal
       v-model="showExitGameModal"
@@ -373,6 +365,7 @@ const handleLogout = () => {
       @confirm="handleLogout"
     />
 
+    <!-- Final completion -->
     <CompletionModal
       v-model="showCompletionModal"
       :completion-time="completionTime"
