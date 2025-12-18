@@ -189,9 +189,9 @@ const confirmLogout = async () => {
   <!-- Template remains exactly the same -->
   <div class="min-h-screen bg-soft font-montserrat">
     <!-- Header -->
-    <header class="bg-white shadow-xl px-4 py-6 sticky top-0 z-20">
+    <header class="bg-white shadow-xl px-4 py-4 sticky top-0 z-20">
       <div class="flex justify-between items-center w-full max-w-6xl mx-auto">
-        <img :src="BMGLogo" class="w-32 h-16" alt="Bring Me Game Logo" />
+        <img :src="BMGLogo" class="w-24 h-12" alt="Bring Me Game Logo" />
         <button
           @click="showLogoutModal = true"
           class="flex items-center gap-1 text-dark-gray transition cursor-pointer hover:text-primary"

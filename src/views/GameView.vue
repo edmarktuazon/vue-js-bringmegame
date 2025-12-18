@@ -203,7 +203,6 @@ const handlePhotoUpload = async (promptIndex) => {
   uploadingPrompt.value = promptIndex
 
   try {
-    console.log('Uploading...')
     const url = await submitPhoto(
       game.value.id,
       user.value.id,

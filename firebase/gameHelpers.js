@@ -23,21 +23,49 @@ import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage
 
 export const submitPhoto = async (gameId, userId, instagramHandle, promptIndex, file) => {
   try {
-    console.log('Starting upload...', { gameId, userId, promptIndex, fileType: file.type })
+    // Validate file
+    if (!file) throw new Error('No file selected')
 
+    // Create canvas to compress and convert to JPEG
+    const img = new Image()
+    const canvas = document.createElement('canvas')
+    const ctx = canvas.getContext('2d')
+
+    const objectUrl = URL.createObjectURL(file)
+    img.src = objectUrl
+
+    await new Promise((resolve, reject) => {
+      img.onload = resolve
+      img.onerror = () => reject(new Error('Failed to load image'))
+    })
+
+    // Set canvas size
+    canvas.width = img.width
+    canvas.height = img.height
+
+    // Draw and compress (quality 0.8 = good balance)
+    ctx.drawImage(img, 0, 0)
+    URL.revokeObjectURL(objectUrl)
+
+    // Convert to blob with proper MIME type
+    const compressedBlob = await new Promise((resolve) => {
+      canvas.toBlob(resolve, 'image/jpeg', 0.8)
+    })
+
+    if (!compressedBlob) throw new Error('Failed to compress image')
+
+    // Use consistent path and name
     const imgRef = storageRef(storage, `submissions/${gameId}/${userId}/prompt_${promptIndex}.jpg`)
 
-    // Upload file
-    console.log('Uploading to storage...')
-    await uploadBytes(imgRef, file)
-    console.log('File uploaded, getting URL...')
+    // Upload compressed JPEG
+    await uploadBytes(imgRef, compressedBlob, {
+      contentType: 'image/jpeg', // ← CRITICAL: force MIME type
+    })
 
     const photoUrl = await getDownloadURL(imgRef)
-    console.log('Got photo URL:', photoUrl)
 
-    // Save submission with server timestamp for real-time ordering
+    // Save to Firestore
     const submissionRef = doc(db, 'games', gameId, 'submissions', `${userId}_${promptIndex}`)
-    console.log('Saving to Firestore...')
 
     await setDoc(
       submissionRef,
@@ -47,22 +75,16 @@ export const submitPhoto = async (gameId, userId, instagramHandle, promptIndex, 
         instagramHandle,
         promptIndex,
         photoUrl,
-        status: 'pending', // Always starts as pending
+        status: 'pending',
         createdAt: serverTimestamp(),
         uploadedAt: serverTimestamp(),
       },
       { merge: true },
     )
 
-    console.log(`✅ Upload successful for prompt ${promptIndex} - Status: PENDING`)
     return photoUrl
   } catch (error) {
     console.error('❌ Error submitting photo:', error)
-    console.error('Error details:', {
-      message: error.message,
-      code: error.code,
-      stack: error.stack,
-    })
     throw error
   }
 }
@@ -337,7 +359,6 @@ export const updateSubmissionStatus = async (gameId, submissionId, status, admin
       reviewedAt: serverTimestamp(),
     })
 
-    console.log('✅ Successfully updated submission status to:', status)
     return true
   } catch (error) {
     console.error('❌ Failed to update submission:', error)
