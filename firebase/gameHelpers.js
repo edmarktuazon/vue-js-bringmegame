@@ -23,43 +23,24 @@ import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage
 
 export const submitPhoto = async (gameId, userId, instagramHandle, promptIndex, file) => {
   try {
-    // Validate file
     if (!file) throw new Error('No file selected')
 
-    // Create canvas to compress and convert to JPEG
-    const img = new Image()
-    const canvas = document.createElement('canvas')
-    const ctx = canvas.getContext('2d')
+    // Force MIME type (critical sa iOS — madalas empty ang file.type)
+    const contentType = file.type || 'image/jpeg'
 
-    const objectUrl = URL.createObjectURL(file)
-    img.src = objectUrl
+    // Create Blob with correct type if needed
+    let uploadData = file
+    if (!file.type) {
+      uploadData = new Blob([file], { type: 'image/jpeg' })
+    }
 
-    await new Promise((resolve, reject) => {
-      img.onload = resolve
-      img.onerror = () => reject(new Error('Failed to load image'))
-    })
+    // Consistent filename
+    const fileName = `prompt_${promptIndex}.jpg`
+    const imgRef = storageRef(storage, `submissions/${gameId}/${userId}/${fileName}`)
 
-    // Set canvas size
-    canvas.width = img.width
-    canvas.height = img.height
-
-    // Draw and compress (quality 0.8 = good balance)
-    ctx.drawImage(img, 0, 0)
-    URL.revokeObjectURL(objectUrl)
-
-    // Convert to blob with proper MIME type
-    const compressedBlob = await new Promise((resolve) => {
-      canvas.toBlob(resolve, 'image/jpeg', 0.8)
-    })
-
-    if (!compressedBlob) throw new Error('Failed to compress image')
-
-    // Use consistent path and name
-    const imgRef = storageRef(storage, `submissions/${gameId}/${userId}/prompt_${promptIndex}.jpg`)
-
-    // Upload compressed JPEG
-    await uploadBytes(imgRef, compressedBlob, {
-      contentType: 'image/jpeg', // ← CRITICAL: force MIME type
+    // Upload with explicit metadata
+    await uploadBytes(imgRef, uploadData, {
+      contentType: contentType,
     })
 
     const photoUrl = await getDownloadURL(imgRef)
@@ -82,9 +63,12 @@ export const submitPhoto = async (gameId, userId, instagramHandle, promptIndex, 
       { merge: true },
     )
 
+    console.log('✅ Upload successful:', photoUrl)
     return photoUrl
   } catch (error) {
-    console.error('❌ Error submitting photo:', error)
+    console.error('Upload failed:', error)
+    console.error('Error code:', error.code) // Important: i-log para makita ang exact error
+    console.error('Error message:', error.message)
     throw error
   }
 }
