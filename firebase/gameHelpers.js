@@ -25,25 +25,47 @@ export const submitPhoto = async (gameId, userId, instagramHandle, promptIndex, 
   try {
     if (!file) throw new Error('No file selected')
 
-    // Force MIME type (critical sa iOS — madalas empty ang file.type)
-    const contentType = file.type || 'image/jpeg'
-
-    // Create Blob with correct type if needed
-    let uploadData = file
-    if (!file.type) {
-      uploadData = new Blob([file], { type: 'image/jpeg' })
-    }
-
-    // Consistent filename
-    const fileName = `prompt_${promptIndex}.jpg`
-    const imgRef = storageRef(storage, `submissions/${gameId}/${userId}/${fileName}`)
-
-    // Upload with explicit metadata
-    await uploadBytes(imgRef, uploadData, {
-      contentType: contentType,
+    console.log('📸 Starting upload:', {
+      fileName: file.name,
+      fileType: file.type,
+      fileSize: file.size,
     })
 
+    // Convert file to blob with proper MIME type
+    let uploadBlob
+
+    if (file.type && file.type.startsWith('image/')) {
+      // File already has proper MIME type
+      uploadBlob = file
+    } else {
+      // Mobile devices sometimes don't set type, so we read and create new blob
+      const arrayBuffer = await file.arrayBuffer()
+      uploadBlob = new Blob([arrayBuffer], { type: 'image/jpeg' })
+    }
+
+    // Generate unique filename with timestamp
+    const timestamp = Date.now()
+    const fileName = `prompt_${promptIndex}_${timestamp}.jpg`
+    const imgRef = storageRef(storage, `submissions/${gameId}/${userId}/${fileName}`)
+
+    console.log('📤 Uploading to:', imgRef.fullPath)
+
+    // Upload with explicit metadata
+    const metadata = {
+      contentType: 'image/jpeg',
+      customMetadata: {
+        userId: userId,
+        gameId: gameId,
+        promptIndex: promptIndex.toString(),
+        uploadedFrom: 'mobile',
+      },
+    }
+
+    await uploadBytes(imgRef, uploadBlob, metadata)
+    console.log('✅ Upload successful')
+
     const photoUrl = await getDownloadURL(imgRef)
+    console.log('✅ Got download URL:', photoUrl)
 
     // Save to Firestore
     const submissionRef = doc(db, 'games', gameId, 'submissions', `${userId}_${promptIndex}`)
@@ -63,11 +85,11 @@ export const submitPhoto = async (gameId, userId, instagramHandle, promptIndex, 
       { merge: true },
     )
 
-    console.log('✅ Upload successful:', photoUrl)
+    console.log('✅ Firestore save successful')
     return photoUrl
   } catch (error) {
-    console.error('Upload failed:', error)
-    console.error('Error code:', error.code) // Important: i-log para makita ang exact error
+    console.error('❌ Upload failed:', error)
+    console.error('Error code:', error.code)
     console.error('Error message:', error.message)
     throw error
   }
@@ -96,7 +118,6 @@ export const createGame = async (prompts, createdByEmail) => {
   }
 
   try {
-    // Deactivate all previous active games
     const activeQuery = query(collection(db, 'games'), where('isActive', '==', true))
     const activeSnap = await getDocs(activeQuery)
 
@@ -106,7 +127,6 @@ export const createGame = async (prompts, createdByEmail) => {
       batch.update(doc.ref, { isActive: false })
     })
 
-    // Create new game
     const newGameRef = doc(collection(db, 'games'))
     const newGameData = {
       prompts: prompts.map((p) => p.trim()),
@@ -246,7 +266,6 @@ export const getUserSubmissions = async (gameId, userId) => {
   }
 }
 
-// Get ALL submissions from ALL games with REAL-TIME updates
 export const getAllSubmissions = (callback) => {
   const gamesRef = collection(db, 'games')
 
@@ -254,12 +273,10 @@ export const getAllSubmissions = (callback) => {
     const allSubmissions = []
     const submissionPromises = []
 
-    // Create listeners for each game's submissions
     gamesSnapshot.docs.forEach((gameDoc) => {
       const gameId = gameDoc.id
       const subsRef = collection(db, 'games', gameId, 'submissions')
 
-      // Create a promise that listens to this game's submissions
       const submissionPromise = new Promise((resolve) => {
         onSnapshot(subsRef, (subsSnapshot) => {
           const gameSubs = []
@@ -277,13 +294,11 @@ export const getAllSubmissions = (callback) => {
       submissionPromises.push(submissionPromise)
     })
 
-    // Wait for all submissions from all games
     const allGameSubmissions = await Promise.all(submissionPromises)
     allGameSubmissions.forEach((gameSubs) => {
       allSubmissions.push(...gameSubs)
     })
 
-    // Sort by uploadedAt descending (newest first)
     allSubmissions.sort((a, b) => {
       const timeA = a.uploadedAt?.toMillis?.() || 0
       const timeB = b.uploadedAt?.toMillis?.() || 0
@@ -295,7 +310,6 @@ export const getAllSubmissions = (callback) => {
   })
 }
 
-// Get submissions for current game only with REAL-TIME updates
 export const listenToSubmissions = (gameId, callback) => {
   const q = query(collection(db, 'games', gameId, 'submissions'), orderBy('uploadedAt', 'desc'))
 
@@ -316,7 +330,6 @@ export const listenToSubmissions = (gameId, callback) => {
   )
 }
 
-// Update submission status with immediate feedback
 export const updateSubmissionStatus = async (gameId, submissionId, status, adminEmail) => {
   try {
     console.log('🔄 Attempting to update submission:', { gameId, submissionId, status })
@@ -388,14 +401,12 @@ export const getLeaderboard = async (gameId, onlyApproved = false) => {
     const leaderboard = []
 
     Object.entries(userSubmissions).forEach(([userId, info]) => {
-      // Required of 3 prompts
       if (info.promptIndices.size !== 3) return
 
       const startTime = Math.min(...info.times)
       const endTime = Math.max(...info.times)
       const totalTime = endTime - startTime
 
-      // Inside the leaderboard mapping
       leaderboard.push({
         userId,
         instagramHandle: info.instagramHandle,
@@ -405,10 +416,8 @@ export const getLeaderboard = async (gameId, onlyApproved = false) => {
       })
     })
 
-    // Sort by fastest first
     leaderboard.sort((a, b) => a.totalTime - b.totalTime)
 
-    // rank
     return leaderboard.map((entry, index) => ({
       ...entry,
       rank: index + 1,
@@ -419,7 +428,6 @@ export const getLeaderboard = async (gameId, onlyApproved = false) => {
   }
 }
 
-// Completion time
 const formatTime = (ms) => {
   if (ms < 1000) return `${ms}ms`
   const totalSeconds = Math.floor(ms / 1000)
@@ -456,7 +464,7 @@ export const getUserCompletionTime = async (gameId, userId) => {
 
     return {
       totalTime,
-      formattedTime: formatDetailedTime(totalTime), // e.g., "3m 16s 230ms"
+      formattedTime: formatDetailedTime(totalTime),
       formatTime,
       startTime,
       endTime,
@@ -467,7 +475,6 @@ export const getUserCompletionTime = async (gameId, userId) => {
   }
 }
 
-// Shared detailed time formatter with milliseconds
 export const formatDetailedTime = (ms) => {
   if (ms <= 0) return '0s 0ms'
 
