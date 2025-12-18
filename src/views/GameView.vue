@@ -319,7 +319,7 @@ const handleLogout = () => {
             </p>
           </div>
           <!-- Prize -->
-          <div v-if="game?.prize" class="bg-white rounded-lg shadow-sm p-6 mb-6">
+          <div v-if="game?.prize" class="bg-white rounded-lg shadow-sm p-6">
             <h3 class="text-lg font-semibold text-dark-gray mb-4 text-center">Today's Prize</h3>
             <div class="flex flex-col items-center gap-4">
               <div
