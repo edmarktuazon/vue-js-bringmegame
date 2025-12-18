@@ -1,5 +1,4 @@
 <script setup>
-import BMGLogo from '/BMG-Logo.png'
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { auth } from '/firebase/config'
@@ -70,11 +69,9 @@ const handleSubmit = async (e) => {
 
 <template>
   <div>
-    <header class="bg-white shadow-xl font-montserrat px-4 py-6 fixed w-full top-0 left-0 z-10">
+    <header class="bg-white shadow-xl font-montserrat px-4 py-4 fixed w-full top-0 left-0 z-10">
       <div class="flex justify-between items-center w-full max-w-6xl mx-auto">
-        <span class="text-xl">
-          <strong>Bring<span class="text-primary">Me</span></strong>
-        </span>
+        <div></div>
         <nav>
           <button @click="openModal" class="flex items-center gap-1 text-dark-gray cursor-pointer">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -85,7 +82,6 @@ const handleSubmit = async (e) => {
                 d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
               />
             </svg>
-            Admin Access
           </button>
         </nav>
       </div>

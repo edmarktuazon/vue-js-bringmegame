@@ -47,7 +47,7 @@ export const submitPhoto = async (gameId, userId, instagramHandle, promptIndex, 
         instagramHandle,
         promptIndex,
         photoUrl,
-        status: 'pending', // ✅ Always starts as pending
+        status: 'pending', // Always starts as pending
         createdAt: serverTimestamp(),
         uploadedAt: serverTimestamp(),
       },
@@ -77,9 +77,6 @@ export const getActiveGame = async () => {
     }
     const gameDoc = snapshot.docs[0]
     const gameData = { id: gameDoc.id, ...gameDoc.data() }
-    console.log('✅ Active game loaded:', gameData)
-    console.log('   Game ID:', gameData.id)
-    console.log('   Created by:', gameData.createdBy)
     return gameData
   } catch (error) {
     console.error('Error getting active game:', error)
@@ -107,7 +104,7 @@ export const createGame = async (prompts, createdByEmail) => {
     const newGameRef = doc(collection(db, 'games'))
     const newGameData = {
       prompts: prompts.map((p) => p.trim()),
-      status: 'active',
+      status: 'waiting',
       isActive: true,
       createdBy: createdByEmail,
       createdAt: serverTimestamp(),
@@ -246,7 +243,7 @@ export const getUserSubmissions = async (gameId, userId) => {
   }
 }
 
-// ✅ UPDATED: Get ALL submissions from ALL games with REAL-TIME updates
+// Get ALL submissions from ALL games with REAL-TIME updates
 export const getAllSubmissions = (callback) => {
   const gamesRef = collection(db, 'games')
 
@@ -295,10 +292,8 @@ export const getAllSubmissions = (callback) => {
   })
 }
 
-// ✅ Get submissions for current game only with REAL-TIME updates
+// Get submissions for current game only with REAL-TIME updates
 export const listenToSubmissions = (gameId, callback) => {
-  console.log('🔴 Setting up real-time listener for game:', gameId)
-
   const q = query(collection(db, 'games', gameId, 'submissions'), orderBy('uploadedAt', 'desc'))
 
   return onSnapshot(
@@ -310,7 +305,6 @@ export const listenToSubmissions = (gameId, callback) => {
         ...doc.data(),
       }))
 
-      console.log(`🔴 Real-time update: ${subs.length} submissions received`)
       callback(subs)
     },
     (error) => {
@@ -319,7 +313,7 @@ export const listenToSubmissions = (gameId, callback) => {
   )
 }
 
-// ✅ UPDATED: Update submission status with immediate feedback
+// Update submission status with immediate feedback
 export const updateSubmissionStatus = async (gameId, submissionId, status, adminEmail) => {
   try {
     console.log('🔄 Attempting to update submission:', { gameId, submissionId, status })
@@ -358,10 +352,6 @@ export const updateSubmissionStatus = async (gameId, submissionId, status, admin
 // LEADERBOARD
 // ============================================
 
-// ============================================
-// LEADERBOARD – Updated for real-time completion time (unverified)
-// ============================================
-
 export const getLeaderboard = async (gameId, onlyApproved = false) => {
   try {
     let q = query(collection(db, 'games', gameId, 'submissions'))
@@ -396,7 +386,7 @@ export const getLeaderboard = async (gameId, onlyApproved = false) => {
     const leaderboard = []
 
     Object.entries(userSubmissions).forEach(([userId, info]) => {
-      // Dapat exactly 3 different prompts
+      // Required of 3 prompts
       if (info.promptIndices.size !== 3) return
 
       const startTime = Math.min(...info.times)
@@ -408,7 +398,7 @@ export const getLeaderboard = async (gameId, onlyApproved = false) => {
         userId,
         instagramHandle: info.instagramHandle,
         totalTime,
-        formattedTime: formatDetailedTime(totalTime), // ← Use the new function
+        formattedTime: formatDetailedTime(totalTime),
         completedAt: endTime,
       })
     })
@@ -416,7 +406,7 @@ export const getLeaderboard = async (gameId, onlyApproved = false) => {
     // Sort by fastest first
     leaderboard.sort((a, b) => a.totalTime - b.totalTime)
 
-    // Add rank
+    // rank
     return leaderboard.map((entry, index) => ({
       ...entry,
       rank: index + 1,
@@ -427,6 +417,7 @@ export const getLeaderboard = async (gameId, onlyApproved = false) => {
   }
 }
 
+// Completion time
 const formatTime = (ms) => {
   if (ms < 1000) return `${ms}ms`
   const totalSeconds = Math.floor(ms / 1000)
@@ -437,7 +428,7 @@ const formatTime = (ms) => {
   if (minutes > 0) {
     return `${minutes}m ${seconds.toString().padStart(2, '0')}s`
   }
-  return `${seconds}s ${millis.toString().padStart(3, '0').slice(0, 1)}` // e.g., 12s 3
+  return `${seconds}s ${millis.toString().padStart(3, '0').slice(0, 1)}`
 }
 
 export const getUserCompletionTime = async (gameId, userId) => {

@@ -320,8 +320,21 @@ const handleLogout = () => {
             </p>
           </div>
         </div>
+
         <div class="lg:col-span-1">
           <LiveFeed :live-feed="liveFeed" />
+        </div>
+        <!-- Prize -->
+        <div v-if="game?.prize" class="bg-white rounded-lg shadow-sm p-6 mb-6">
+          <h3 class="text-lg font-semibold text-dark-gray mb-4 text-center">Today's Prize</h3>
+          <div class="flex flex-col items-center gap-4">
+            <div v-if="game.prize.logoUrl" class="w-32 h-32 rounded-full overflow-hidden shadow-lg">
+              <img :src="game.prize.logoUrl" alt="Prize logo" class="w-full h-full object-cover" />
+            </div>
+            <p class="text-center text-dark-gray font-medium max-w-md">
+              {{ game.prize.description || 'Amazing prize awaits the fastest player!' }}
+            </p>
+          </div>
         </div>
       </div>
 
