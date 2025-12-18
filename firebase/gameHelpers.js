@@ -31,6 +31,16 @@ export const submitPhoto = async (gameId, userId, instagramHandle, promptIndex, 
       fileSize: file.size,
     })
 
+    // Ensure Firebase Auth is ready
+    const { auth } = await import('/firebase/config')
+    const { signInAnonymously } = await import('firebase/auth')
+
+    if (!auth.currentUser) {
+      console.log('🔐 No auth user, signing in...')
+      await signInAnonymously(auth)
+      console.log('✅ Auth successful')
+    }
+
     // Convert file to blob with proper MIME type
     let uploadBlob
 
