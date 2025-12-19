@@ -25,29 +25,24 @@ export const submitPhoto = async (gameId, userId, instagramHandle, promptIndex, 
   try {
     if (!file) throw new Error('No file selected')
 
-    console.log('Raw file received:', file.name, file.size, file.type)
-
-    // Critical fix for mobile: Force correct Blob with JPEG type
-    let uploadBlob = file
-
-    // Android Chrome + capture often gives empty or wrong type
-    if (!file.type || file.type === '' || !file.type.startsWith('image/')) {
-      console.log('Fixing MIME type for mobile...')
-
-      // Read as ArrayBuffer then create new Blob with correct type
-      const arrayBuffer = await file.arrayBuffer()
-      uploadBlob = new Blob([arrayBuffer], { type: 'image/jpeg' })
-    }
-
-    // Unique filename to avoid conflicts
-    const timestamp = Date.now()
-    const fileName = `prompt_${promptIndex}_${timestamp}.jpg`
-    const imgRef = storageRef(storage, `submissions/${gameId}/${userId}/${fileName}`)
-
-    // Upload with explicit metadata
-    await uploadBytes(imgRef, uploadBlob, {
-      contentType: 'image/jpeg',
+    console.log('File info:', {
+      name: file.name,
+      size: file.size,
+      type: file.type || '(empty)',
     })
+
+    // Create a new File object with forced name and type
+    const fixedFile = new File([file], `prompt_${promptIndex}.jpg`, {
+      type: 'image/jpeg',
+      lastModified: Date.now(),
+    })
+
+    // Unique path to avoid any conflicts
+    const filePath = `submissions/${gameId}/${userId}/prompt_${promptIndex}.jpg`
+    const imgRef = storageRef(storage, filePath)
+
+    // Upload the fixed file
+    await uploadBytes(imgRef, fixedFile)
 
     const photoUrl = await getDownloadURL(imgRef)
     console.log('Upload successful:', photoUrl)
@@ -72,7 +67,7 @@ export const submitPhoto = async (gameId, userId, instagramHandle, promptIndex, 
 
     return photoUrl
   } catch (error) {
-    console.error('Upload failed completely:', error)
+    console.error('Upload failed:', error)
     console.error('Error code:', error.code)
     console.error('Error message:', error.message)
     throw error
