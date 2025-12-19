@@ -1,11 +1,14 @@
 <script setup>
 defineProps({
-  submissions: Object,
+  submissions: {
+    type: Object,
+    default: () => ({}),
+  },
 })
 </script>
 
 <template>
-  <div class="my-12">
+  <div class="my-12" v-if="Object.keys(submissions).length > 0">
     <p class="text-xs text-slate font-medium mb-2">Your uploaded photos:</p>
     <div class="grid grid-cols-3 gap-2">
       <div v-for="(sub, idx) in submissions" :key="idx" class="relative">

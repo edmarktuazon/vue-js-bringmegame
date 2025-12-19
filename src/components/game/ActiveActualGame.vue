@@ -90,14 +90,14 @@ const isCompleted = computed(() => {
           >
             {{
               uploadingPrompt === nextPromptIndex
-                ? 'Uploading your photo...'
-                : 'Tap here to take or upload a photo!'
+                ? 'Processing your photo...'
+                : 'Hurry! Tap here to take a photo!'
             }}
           </span>
 
           <input
             type="file"
-            accept="image/*;capture=environment,image/jpeg"
+            accept="image/*"
             capture="environment"
             class="hidden"
             :disabled="uploadingPrompt === nextPromptIndex"
