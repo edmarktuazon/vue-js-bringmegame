@@ -25,26 +25,32 @@ export const submitPhoto = async (gameId, userId, instagramHandle, promptIndex, 
   try {
     if (!file) throw new Error('No file selected')
 
-    console.log('File details:', {
-      name: file.name,
-      size: file.size,
-      type: file.type || 'EMPTY TYPE',
+    console.log('Raw file received:', file.name, file.size, file.type)
+
+    // Critical fix for mobile: Force correct Blob with JPEG type
+    let uploadBlob = file
+
+    // Android Chrome + capture often gives empty or wrong type
+    if (!file.type || file.type === '' || !file.type.startsWith('image/')) {
+      console.log('Fixing MIME type for mobile...')
+
+      // Read as ArrayBuffer then create new Blob with correct type
+      const arrayBuffer = await file.arrayBuffer()
+      uploadBlob = new Blob([arrayBuffer], { type: 'image/jpeg' })
+    }
+
+    // Unique filename to avoid conflicts
+    const timestamp = Date.now()
+    const fileName = `prompt_${promptIndex}_${timestamp}.jpg`
+    const imgRef = storageRef(storage, `submissions/${gameId}/${userId}/${fileName}`)
+
+    // Upload with explicit metadata
+    await uploadBytes(imgRef, uploadBlob, {
+      contentType: 'image/jpeg',
     })
-
-    // Force create new File with JPEG type — fixes mobile camera issue
-    const fixedFile = new File([file], `prompt_${promptIndex}.jpg`, {
-      type: 'image/jpeg',
-      lastModified: Date.now(),
-    })
-
-    const filePath = `submissions/${gameId}/${userId}/prompt_${promptIndex}.jpg`
-    const imgRef = storageRef(storage, filePath)
-
-    // Upload directly
-    await uploadBytes(imgRef, fixedFile)
 
     const photoUrl = await getDownloadURL(imgRef)
-    console.log('Upload success:', photoUrl)
+    console.log('Upload successful:', photoUrl)
 
     // Save to Firestore
     const submissionRef = doc(db, 'games', gameId, 'submissions', `${userId}_${promptIndex}`)
@@ -66,8 +72,8 @@ export const submitPhoto = async (gameId, userId, instagramHandle, promptIndex, 
 
     return photoUrl
   } catch (error) {
-    console.error('Upload failed:', error)
-    console.error('Error code:', error.code || 'No code')
+    console.error('Upload failed completely:', error)
+    console.error('Error code:', error.code)
     console.error('Error message:', error.message)
     throw error
   }
