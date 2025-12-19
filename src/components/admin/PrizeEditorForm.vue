@@ -31,7 +31,6 @@ const handleSavePrize = async () => {
   savingPrize.value = true
   try {
     await updatePrize(props.currentGame.id, prizeDescription.value, prizeLogoFile.value)
-    alert('Prize saved')
     emit('prize-saved')
   } catch (_) {
     alert('Failed to save prize')
