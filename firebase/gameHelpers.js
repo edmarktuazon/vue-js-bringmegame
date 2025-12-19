@@ -25,27 +25,26 @@ export const submitPhoto = async (gameId, userId, instagramHandle, promptIndex, 
   try {
     if (!file) throw new Error('No file selected')
 
-    console.log('File info:', {
+    console.log('File details:', {
       name: file.name,
       size: file.size,
-      type: file.type || '(empty)',
+      type: file.type || 'EMPTY TYPE',
     })
 
-    // Create a new File object with forced name and type
+    // Force create new File with JPEG type — fixes mobile camera issue
     const fixedFile = new File([file], `prompt_${promptIndex}.jpg`, {
       type: 'image/jpeg',
       lastModified: Date.now(),
     })
 
-    // Unique path to avoid any conflicts
     const filePath = `submissions/${gameId}/${userId}/prompt_${promptIndex}.jpg`
     const imgRef = storageRef(storage, filePath)
 
-    // Upload the fixed file
+    // Upload directly
     await uploadBytes(imgRef, fixedFile)
 
     const photoUrl = await getDownloadURL(imgRef)
-    console.log('Upload successful:', photoUrl)
+    console.log('Upload success:', photoUrl)
 
     // Save to Firestore
     const submissionRef = doc(db, 'games', gameId, 'submissions', `${userId}_${promptIndex}`)
@@ -68,7 +67,7 @@ export const submitPhoto = async (gameId, userId, instagramHandle, promptIndex, 
     return photoUrl
   } catch (error) {
     console.error('Upload failed:', error)
-    console.error('Error code:', error.code)
+    console.error('Error code:', error.code || 'No code')
     console.error('Error message:', error.message)
     throw error
   }
