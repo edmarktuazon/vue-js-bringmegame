@@ -97,8 +97,8 @@ const isCompleted = computed(() => {
 
           <input
             type="file"
-            accept="image/*"
-            capture="environment"
+            accept="image/*;capture=environment,image/jpeg"
+            capture="camera"
             class="hidden"
             :disabled="uploadingPrompt === nextPromptIndex"
             @change="(e) => emit('photo-select', nextPromptIndex, e)"
