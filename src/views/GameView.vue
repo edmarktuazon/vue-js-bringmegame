@@ -8,7 +8,16 @@ import {
   getUserCompletionTime,
 } from '/firebase/gameHelpers'
 import { db } from '/firebase/config'
-import { collection, query, where, onSnapshot, orderBy } from 'firebase/firestore'
+import {
+  collection,
+  query,
+  where,
+  onSnapshot,
+  orderBy,
+  doc,
+  updateDoc,
+  serverTimestamp,
+} from 'firebase/firestore'
 
 import NavigationGame from '../components/game/NavigationGame.vue'
 import CountdownOverlay from '../components/game/CountdownOverlay.vue'
@@ -88,6 +97,13 @@ onMounted(async () => {
       return
     }
 
+    // === NEW: Update user's currentGameId ===
+    await updateDoc(doc(db, 'users', user.value.id), {
+      currentGameId: game.value.id,
+      hasJoined: true,
+      lastActiveAt: serverTimestamp(),
+    })
+
     submissions.value = (await getUserSubmissions(game.value.id, user.value.id)) || {}
 
     setupGameListener()
@@ -166,15 +182,25 @@ const setupGameListener = () => {
   })
 }
 
-// User live feed
+// User live feed — current game only
 const setupLiveFeedListener = () => {
+  if (!game.value?.id) {
+    liveFeed.value = []
+    return
+  }
+
   const q = query(
     collection(db, 'users'),
+    where('currentGameId', '==', game.value.id),
     where('hasJoined', '==', true),
     orderBy('joinedAt', 'desc'),
   )
+
   unsubscribeFeed = onSnapshot(q, (snapshot) => {
-    liveFeed.value = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }))
+    liveFeed.value = snapshot.docs.map((doc) => ({
+      id: doc.id,
+      instagramHandle: doc.data().instagramHandle,
+    }))
   })
 }
 
@@ -337,7 +363,7 @@ const handleLogout = () => {
           </div>
         </div>
 
-        <div class="lg:col-span-1">
+        <div class="lg:col-span-1" v-if="game?.status === 'waiting' || game?.status === 'starting'">
           <LiveFeed :live-feed="liveFeed" />
         </div>
       </div>

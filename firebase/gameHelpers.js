@@ -180,32 +180,43 @@ export const updatePrize = async (gameId, description, logoFile) => {
 // USER FUNCTIONS
 // ============================================
 
-export const createUser = async (instagramHandle) => {
+export const createUser = async (instagramHandle, currentGameId = null) => {
   try {
     const q = query(collection(db, 'users'), where('instagramHandle', '==', instagramHandle))
     const snapshot = await getDocs(q)
 
     if (!snapshot.empty) {
       const userDoc = snapshot.docs[0]
-      return { id: userDoc.id, ...userDoc.data() }
+      const userData = { id: userDoc.id, ...userDoc.data() }
+
+      if (currentGameId) {
+        await updateDoc(doc(db, 'users', userDoc.id), {
+          currentGameId,
+          hasJoined: true,
+          joinedAt: serverTimestamp(),
+        })
+      }
+
+      return userData
     }
 
+    // New user
     const userRef = doc(collection(db, 'users'))
     const userData = {
       instagramHandle,
-      joinedAt: serverTimestamp(),
+      currentGameId, // ← save it if provided
       hasJoined: true,
-      currentGameId: null,
+      joinedAt: serverTimestamp(),
     }
 
     await setDoc(userRef, userData)
+    console.log('New user created:', userRef.id)
     return { id: userRef.id, ...userData }
   } catch (error) {
-    console.error('Error creating user:', error)
+    console.error('Error creating/updating user:', error)
     throw error
   }
 }
-
 export const updateUserCurrentGame = async (userId, gameId) => {
   try {
     await updateDoc(doc(db, 'users', userId), {
