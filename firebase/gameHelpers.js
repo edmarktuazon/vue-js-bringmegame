@@ -1,5 +1,5 @@
-// firebase/gameHelpers.js
 import { db, storage } from '/firebase/config'
+import imageCompression from 'browser-image-compression'
 import {
   collection,
   doc,
@@ -25,34 +25,37 @@ export const submitPhoto = async (gameId, userId, instagramHandle, promptIndex, 
   try {
     if (!file) throw new Error('No file selected')
 
-    console.log('Raw file received:', file.name, file.size, file.type)
+    console.log('Original file:', file.name, file.size / 1024 / 1024 + 'MB', file.type)
 
-    // Critical fix for mobile: Force correct Blob with JPEG type
-    let uploadBlob = file
-
-    // Android Chrome + capture often gives empty or wrong type
-    if (!file.type || file.type === '' || !file.type.startsWith('image/')) {
-      console.log('Fixing MIME type for mobile...')
-
-      // Read as ArrayBuffer then create new Blob with correct type
-      const arrayBuffer = await file.arrayBuffer()
-      uploadBlob = new Blob([arrayBuffer], { type: 'image/jpeg' })
+    // Compression options — optimized for mobile
+    const options = {
+      maxSizeMB: 1, // Max 1MB
+      maxWidthOrHeight: 1024, // Resize to max 1024px
+      useWebWorker: true, // Faster, no UI freeze
+      fileType: 'image/jpeg', // Force JPEG
     }
 
-    // Unique filename to avoid conflicts
-    const timestamp = Date.now()
-    const fileName = `prompt_${promptIndex}_${timestamp}.jpg`
-    const imgRef = storageRef(storage, `submissions/${gameId}/${userId}/${fileName}`)
+    // Compress the image
+    const compressedFile = await imageCompression(file, options)
 
-    // Upload with explicit metadata
-    await uploadBytes(imgRef, uploadBlob, {
+    console.log(
+      'Compressed file:',
+      compressedFile.name,
+      compressedFile.size / 1024 / 1024 + 'MB',
+      compressedFile.type,
+    )
+
+    // Upload to Storage
+    const filePath = `submissions/${gameId}/${userId}/prompt_${promptIndex}.jpg`
+    const imgRef = storageRef(storage, filePath)
+
+    await uploadBytes(imgRef, compressedFile, {
       contentType: 'image/jpeg',
     })
 
     const photoUrl = await getDownloadURL(imgRef)
-    console.log('Upload successful:', photoUrl)
 
-    // Save to Firestore
+    // Save metadata to Firestore
     const submissionRef = doc(db, 'games', gameId, 'submissions', `${userId}_${promptIndex}`)
 
     await setDoc(
@@ -72,7 +75,7 @@ export const submitPhoto = async (gameId, userId, instagramHandle, promptIndex, 
 
     return photoUrl
   } catch (error) {
-    console.error('Upload failed completely:', error)
+    console.error('Upload failed:', error)
     console.error('Error code:', error.code)
     console.error('Error message:', error.message)
     throw error
