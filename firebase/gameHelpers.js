@@ -24,25 +24,73 @@ export const submitPhoto = async (gameId, userId, instagramHandle, promptIndex, 
   try {
     if (!file) throw new Error('No file selected')
 
-    console.log('Raw file:', file.name || 'no name', file.size, file.type || 'no type')
-
-    // Force create a new File object with proper name and type
-    // This fixes missing/wrong MIME type on mobile camera
-    const fixedFile = new File([file], `prompt_${promptIndex}.jpg`, {
-      type: 'image/jpeg',
-      lastModified: Date.now(),
+    console.log('🔍 Original file:', {
+      name: file.name,
+      size: `${(file.size / 1024 / 1024).toFixed(2)}MB`,
+      type: file.type,
     })
 
-    const filePath = `submissions/${gameId}/${userId}/prompt_${promptIndex}.jpg`
+    // ✅ Compression options — optimized for ALL mobile devices
+    const options = {
+      maxSizeMB: 0.8, // Smaller size for better mobile compatibility
+      maxWidthOrHeight: 1024,
+      useWebWorker: true,
+      fileType: 'image/jpeg',
+      initialQuality: 0.8, // Added quality control
+    }
+
+    // Compress the image
+    let compressedFile
+    try {
+      compressedFile = await imageCompression(file, options)
+      console.log('✅ Compressed file:', {
+        name: compressedFile.name,
+        size: `${(compressedFile.size / 1024 / 1024).toFixed(2)}MB`,
+        type: compressedFile.type,
+      })
+    } catch (compressionError) {
+      console.error('❌ Compression failed:', compressionError)
+      // Fallback: use original file if compression fails
+      compressedFile = file
+      console.log('⚠️ Using original file instead')
+    }
+
+    // ✅ Ensure user is authenticated
+    const { auth } = await import('/firebase/config')
+    if (!auth.currentUser) {
+      console.log('🔐 No auth user, signing in anonymously...')
+      const { signInAnonymously } = await import('firebase/auth')
+      await signInAnonymously(auth)
+      console.log('✅ Anonymous sign-in successful')
+    }
+
+    // ✅ Upload to Storage with sanitized filename
+    const timestamp = Date.now()
+    const sanitizedFileName = `prompt_${promptIndex}_${timestamp}.jpg`
+    const filePath = `submissions/${gameId}/${userId}/${sanitizedFileName}`
+
+    console.log('📤 Uploading to:', filePath)
+
     const imgRef = storageRef(storage, filePath)
 
-    // Upload directly (no compression needed for reliability)
-    await uploadBytes(imgRef, fixedFile)
+    // Upload with explicit metadata
+    const metadata = {
+      contentType: 'image/jpeg',
+      customMetadata: {
+        gameId: gameId,
+        userId: userId,
+        promptIndex: String(promptIndex),
+        uploadedAt: new Date().toISOString(),
+      },
+    }
+
+    await uploadBytes(imgRef, compressedFile, metadata)
+    console.log('✅ Upload successful!')
 
     const photoUrl = await getDownloadURL(imgRef)
-    console.log('Upload successful:', photoUrl)
+    console.log('✅ Download URL obtained:', photoUrl)
 
-    // Save to Firestore
+    // ✅ Save metadata to Firestore
     const submissionRef = doc(db, 'games', gameId, 'submissions', `${userId}_${promptIndex}`)
 
     await setDoc(
@@ -51,7 +99,7 @@ export const submitPhoto = async (gameId, userId, instagramHandle, promptIndex, 
         gameId,
         userId,
         instagramHandle,
-        promptIndex,
+        promptIndex: Number(promptIndex), // Ensure it's a number
         photoUrl,
         status: 'pending',
         createdAt: serverTimestamp(),
@@ -60,12 +108,26 @@ export const submitPhoto = async (gameId, userId, instagramHandle, promptIndex, 
       { merge: true },
     )
 
+    console.log('✅ Firestore metadata saved!')
     return photoUrl
   } catch (error) {
-    console.error('Upload failed:', error)
-    console.error('Error code:', error.code)
-    console.error('Error message:', error.message)
-    throw error
+    console.error('❌ Upload failed:', {
+      message: error.message,
+      code: error.code,
+      serverResponse: error.serverResponse,
+      stack: error.stack,
+    })
+
+    // More specific error messages
+    if (error.code === 'storage/unauthorized') {
+      throw new Error('Authentication failed. Please refresh and try again.')
+    } else if (error.code === 'storage/quota-exceeded') {
+      throw new Error('Storage quota exceeded. Please contact admin.')
+    } else if (error.code === 'storage/retry-limit-exceeded') {
+      throw new Error('Upload timeout. Please check your internet connection.')
+    } else {
+      throw new Error(`Upload failed: ${error.message}`)
+    }
   }
 }
 
