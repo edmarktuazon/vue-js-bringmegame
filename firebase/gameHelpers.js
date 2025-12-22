@@ -20,42 +20,29 @@ import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage
 // ============================================
 // GAME FUNCTIONS
 // ============================================
-
 export const submitPhoto = async (gameId, userId, instagramHandle, promptIndex, file) => {
   try {
     if (!file) throw new Error('No file selected')
 
-    console.log('Original file:', file.name, file.size / 1024 / 1024 + 'MB', file.type)
+    console.log('Raw file:', file.name || 'no name', file.size, file.type || 'no type')
 
-    // Compression options — optimized for mobile
-    const options = {
-      maxSizeMB: 1, // Max 1MB
-      maxWidthOrHeight: 1024, // Resize to max 1024px
-      useWebWorker: true, // Faster, no UI freeze
-      fileType: 'image/jpeg', // Force JPEG
-    }
+    // Force create a new File object with proper name and type
+    // This fixes missing/wrong MIME type on mobile camera
+    const fixedFile = new File([file], `prompt_${promptIndex}.jpg`, {
+      type: 'image/jpeg',
+      lastModified: Date.now(),
+    })
 
-    // Compress the image
-    const compressedFile = await imageCompression(file, options)
-
-    console.log(
-      'Compressed file:',
-      compressedFile.name,
-      compressedFile.size / 1024 / 1024 + 'MB',
-      compressedFile.type,
-    )
-
-    // Upload to Storage
     const filePath = `submissions/${gameId}/${userId}/prompt_${promptIndex}.jpg`
     const imgRef = storageRef(storage, filePath)
 
-    await uploadBytes(imgRef, compressedFile, {
-      contentType: 'image/jpeg',
-    })
+    // Upload directly (no compression needed for reliability)
+    await uploadBytes(imgRef, fixedFile)
 
     const photoUrl = await getDownloadURL(imgRef)
+    console.log('Upload successful:', photoUrl)
 
-    // Save metadata to Firestore
+    // Save to Firestore
     const submissionRef = doc(db, 'games', gameId, 'submissions', `${userId}_${promptIndex}`)
 
     await setDoc(
@@ -81,6 +68,7 @@ export const submitPhoto = async (gameId, userId, instagramHandle, promptIndex, 
     throw error
   }
 }
+
 export const getActiveGame = async () => {
   try {
     const q = query(collection(db, 'games'), where('isActive', '==', true), limit(1))
