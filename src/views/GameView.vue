@@ -60,6 +60,7 @@ const countdown = ref(30)
 const countdownInterval = ref(null)
 
 // Timer state
+
 const timerInterval = ref(null)
 
 // Completion modal
@@ -70,75 +71,57 @@ let unsubscribeGame = null
 let unsubscribeFeed = null
 
 onMounted(async () => {
-  console.log('🎮 Game component mounted')
-
   const userStr = localStorage.getItem('bmg_user')
   if (!userStr) {
-    console.log('❌ No user found in localStorage')
     router.push('/')
     return
   }
 
   user.value = JSON.parse(userStr)
-  console.log('✅ User loaded:', user.value)
 
   // Sign in anonymously to enable Firebase Storage uploads
   try {
-    console.log('🔐 Authenticating with Firebase...')
     const { signInAnonymously } = await import('firebase/auth')
     const { auth } = await import('/firebase/config')
-    const result = await signInAnonymously(auth)
-    console.log('✅ Anonymous auth successful:', result.user.uid)
+    await signInAnonymously(auth)
   } catch (error) {
-    console.error('❌ Auth error:', error)
-    alert('Authentication failed. Please refresh the page.')
+    console.error('Auth error:', error)
   }
 
   try {
-    console.log('🎲 Loading active game...')
     game.value = await getActiveGame()
 
     if (!game.value) {
-      console.log('❌ No active game found')
       alert('No active game found')
       router.push('/')
       return
     }
 
-    console.log('✅ Active game loaded:', game.value.id)
-
-    // Update user's currentGameId
-    console.log('📝 Updating user currentGameId...')
+    // === NEW: Update user's currentGameId ===
     await updateDoc(doc(db, 'users', user.value.id), {
       currentGameId: game.value.id,
       hasJoined: true,
       lastActiveAt: serverTimestamp(),
     })
-    console.log('✅ User updated')
 
-    console.log('📤 Loading user submissions...')
     submissions.value = (await getUserSubmissions(game.value.id, user.value.id)) || {}
-    console.log('✅ Submissions loaded:', Object.keys(submissions.value).length)
 
     setupGameListener()
     setupLiveFeedListener()
 
     if (game.value.status === 'active') {
-      console.log('⏰ Game is active, starting countdown')
       startCountdown()
     }
 
     loading.value = false
-    console.log('✅ Game component ready')
   } catch (error) {
-    console.error('❌ Error loading game:', error)
-    alert('Failed to load game: ' + error.message)
+    console.error('Error loading game:', error)
+    alert('Failed to load game')
     router.push('/')
   }
 })
 
 onUnmounted(() => {
-  console.log('🧹 Cleaning up game component')
   if (unsubscribeGame) unsubscribeGame()
   if (unsubscribeFeed) unsubscribeFeed()
   if (countdownInterval.value) clearInterval(countdownInterval.value)
@@ -149,7 +132,6 @@ onUnmounted(() => {
 watch(
   () => game.value?.status,
   (newStatus, oldStatus) => {
-    console.log(`🔄 Game status changed: ${oldStatus} → ${newStatus}`)
     if (oldStatus === 'waiting' && newStatus === 'active') {
       startCountdown()
     }
@@ -158,14 +140,12 @@ watch(
 
 // Game countdown
 const startCountdown = () => {
-  console.log('⏰ Starting countdown from 30')
   showCountdown.value = true
   countdown.value = 30
 
   countdownInterval.value = setInterval(() => {
     countdown.value--
     if (countdown.value <= 0) {
-      console.log('✅ Countdown finished')
       clearInterval(countdownInterval.value)
       showCountdown.value = false
     }
@@ -175,21 +155,16 @@ const startCountdown = () => {
 // Checking of completion of prompt
 const checkCompletion = async () => {
   const submittedCount = Object.keys(submissions.value).length
-  console.log(`🎯 Checking completion: ${submittedCount}/3 prompts submitted`)
 
   if (submittedCount === 3 && game.value?.id && user.value?.id) {
-    console.log('🎉 All prompts completed!')
-
     if (timerInterval.value) {
       clearInterval(timerInterval.value)
     }
 
     // Get completion time from server
-    console.log('⏱️ Fetching completion time...')
     const result = await getUserCompletionTime(game.value.id, user.value.id)
 
     if (result) {
-      console.log('✅ Completion time:', result.formattedTime)
       completionTime.value = result
       showCompletionModal.value = true
     }
@@ -199,12 +174,10 @@ const checkCompletion = async () => {
 // Snapshot of game
 const setupGameListener = () => {
   if (!game.value) return
-  console.log('👂 Setting up game listener')
   const q = query(collection(db, 'games'), where('isActive', '==', true))
   unsubscribeGame = onSnapshot(q, (snapshot) => {
     if (!snapshot.empty) {
       game.value = { id: snapshot.docs[0].id, ...snapshot.docs[0].data() }
-      console.log('🔄 Game updated via listener')
     }
   })
 }
@@ -212,12 +185,10 @@ const setupGameListener = () => {
 // User live feed — current game only
 const setupLiveFeedListener = () => {
   if (!game.value?.id) {
-    console.log('⚠️ No game ID for live feed')
     liveFeed.value = []
     return
   }
 
-  console.log('👂 Setting up live feed listener')
   const q = query(
     collection(db, 'users'),
     where('currentGameId', '==', game.value.id),
@@ -230,7 +201,6 @@ const setupLiveFeedListener = () => {
       id: doc.id,
       instagramHandle: doc.data().instagramHandle,
     }))
-    console.log(`👥 Live feed updated: ${liveFeed.value.length} users`)
   })
 }
 
@@ -243,82 +213,21 @@ const nextPromptIndex = computed(() => {
   return null
 })
 
-// Handling photo select with validation
+// Handling photo upload
 const handlePhotoSelect = (promptIndex, e) => {
   const file = e.target.files[0]
-
-  console.log('📸 Photo selected:', {
-    promptIndex,
-    fileName: file?.name,
-    fileSize: file ? `${(file.size / 1024 / 1024).toFixed(2)}MB` : 'N/A',
-    fileType: file?.type,
-  })
-
-  if (!file) {
-    console.log('❌ No file selected')
-    return
-  }
-
-  // Validate file type
-  const validTypes = [
-    'image/jpeg',
-    'image/jpg',
-    'image/png',
-    'image/webp',
-    'image/heic',
-    'image/heif',
-  ]
-  if (!validTypes.includes(file.type.toLowerCase())) {
-    console.error('❌ Invalid file type:', file.type)
-    alert(`Invalid file type: ${file.type}\nPlease select a JPEG, PNG, or WEBP image.`)
-    e.target.value = '' // Reset input
-    return
-  }
-
-  // Validate file size (max 20MB before compression)
-  const maxSize = 20 * 1024 * 1024 // 20MB
-  if (file.size > maxSize) {
-    console.error('❌ File too large:', file.size)
-    alert(
-      `File is too large (${(file.size / 1024 / 1024).toFixed(2)}MB)\nPlease select an image smaller than 20MB.`,
-    )
-    e.target.value = '' // Reset input
-    return
-  }
-
-  console.log('✅ File validation passed')
+  if (!file) return
   selectedPhotoFile.value = file
   handlePhotoUpload(promptIndex)
 }
 
-// Handling photo upload with detailed error logging
-const handlePhotoUpload = async (promptIndex, retryCount = 0) => {
-  if (!selectedPhotoFile.value) {
-    console.log('❌ No file to upload')
-    return
-  }
+// Handling photo upload
+const handlePhotoUpload = async (promptIndex) => {
+  if (!selectedPhotoFile.value) return
 
   uploadingPrompt.value = promptIndex
 
-  console.log(`📤 Starting upload attempt ${retryCount + 1}:`, {
-    promptIndex,
-    gameId: game.value?.id,
-    userId: user.value?.id,
-    fileName: selectedPhotoFile.value.name,
-  })
-
   try {
-    // Ensure auth before upload
-    const { auth } = await import('/firebase/config')
-    if (!auth.currentUser) {
-      console.log('⚠️ No auth user detected, signing in anonymously...')
-      const { signInAnonymously } = await import('firebase/auth')
-      await signInAnonymously(auth)
-      console.log('✅ Anonymous sign-in successful')
-    } else {
-      console.log('✅ User already authenticated:', auth.currentUser.uid)
-    }
-
     const url = await submitPhoto(
       game.value.id,
       user.value.id,
@@ -326,110 +235,24 @@ const handlePhotoUpload = async (promptIndex, retryCount = 0) => {
       promptIndex,
       selectedPhotoFile.value,
     )
+    console.log('Upload done:', url)
 
-    console.log('✅ Upload successful! URL:', url)
-
-    // Refresh submissions from server
-    console.log('🔄 Refreshing submissions...')
     submissions.value = await getUserSubmissions(game.value.id, user.value.id)
-    console.log('✅ Submissions refreshed:', Object.keys(submissions.value).length, 'total')
 
     selectedPhotoFile.value = null
 
     // Check if all prompts completed
     await checkCompletion()
   } catch (error) {
-    console.error('❌ UPLOAD ERROR DETAILS:', {
-      message: error.message,
-      code: error.code,
-      name: error.name,
-      stack: error.stack,
-      fullError: error,
-    })
-
-    // Retry logic for network/timeout errors
-    const maxRetries = 2
-    const retryableErrors = [
-      'network',
-      'timeout',
-      'failed to fetch',
-      'retry-limit-exceeded',
-      'connection',
-      'fetch',
-    ]
-
-    const isRetryable = retryableErrors.some(
-      (keyword) =>
-        error.message?.toLowerCase().includes(keyword) ||
-        error.code?.toLowerCase().includes(keyword),
-    )
-
-    if (retryCount < maxRetries && isRetryable) {
-      console.log(`🔄 Retrying upload (${retryCount + 1}/${maxRetries})...`)
-
-      // Exponential backoff
-      const delay = 1000 * Math.pow(2, retryCount)
-      console.log(`⏳ Waiting ${delay}ms before retry...`)
-
-      await new Promise((resolve) => setTimeout(resolve, delay))
-
-      return handlePhotoUpload(promptIndex, retryCount + 1)
-    }
-
-    // Determine user-friendly error message
-    let errorMessage = 'Upload failed. Please try again.'
-    let technicalDetails = `Error: ${error.message || 'Unknown'}`
-
-    if (error.code === 'storage/unauthorized' || error.message?.includes('unauthorized')) {
-      errorMessage =
-        '🔐 Authentication Error\n\nYour session may have expired.\nPlease refresh the page and try again.'
-      technicalDetails = 'Error: storage/unauthorized - User not authenticated'
-    } else if (error.code === 'storage/quota-exceeded') {
-      errorMessage =
-        '💾 Storage Limit Reached\n\nThe storage quota has been exceeded.\nPlease contact support.'
-      technicalDetails = 'Error: storage/quota-exceeded'
-    } else if (
-      error.code === 'storage/retry-limit-exceeded' ||
-      error.message?.includes('timeout')
-    ) {
-      errorMessage =
-        '⏱️ Upload Timeout\n\nThe upload took too long.\nPlease check your internet connection and try again.'
-      technicalDetails = 'Error: timeout or retry limit exceeded'
-    } else if (error.message?.includes('network') || error.message?.includes('fetch')) {
-      errorMessage = '📡 Network Error\n\nPlease check your internet connection and try again.'
-      technicalDetails = `Error: ${error.message}`
-    } else if (error.code === 'storage/object-not-found') {
-      errorMessage = '📁 Upload Error\n\nStorage location not found.\nPlease contact support.'
-      technicalDetails = 'Error: storage/object-not-found'
-    } else if (error.message?.includes('compression')) {
-      errorMessage =
-        '🖼️ Image Processing Error\n\nFailed to process the image.\nTry a different photo or smaller file size.'
-      technicalDetails = `Error: ${error.message}`
-    } else {
-      errorMessage = `❌ Upload Failed\n\n${error.message || 'Unknown error occurred'}\n\nPlease try again or contact support if this persists.`
-      technicalDetails = `Error: ${error.code || error.name || 'Unknown'} - ${error.message}`
-    }
-
-    console.error('🚨 SHOWING ERROR TO USER:', {
-      userMessage: errorMessage,
-      technical: technicalDetails,
-    })
-
-    alert(errorMessage)
-
-    // Don't reset file on retryable errors in case user wants to retry manually
-    if (!isRetryable || retryCount >= maxRetries) {
-      selectedPhotoFile.value = null
-    }
+    console.error('Upload failed:', error)
+    alert('Upload failed. Please try again.')
   } finally {
     uploadingPrompt.value = null
-    console.log('✅ Upload attempt finished')
   }
 }
 
 // Logout session
 const handleLogout = () => {
-  console.log('👋 Logging out user')
   localStorage.removeItem('bmg_user')
   router.push('/')
 }
@@ -561,6 +384,7 @@ const handleLogout = () => {
     </div>
 
     <!-- Exit game modal -->
+
     <ExitGameModal
       v-model="showExitGameModal"
       :is-logging-out="isLoggingOut"
