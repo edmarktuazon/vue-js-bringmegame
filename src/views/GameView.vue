@@ -80,13 +80,13 @@ onMounted(async () => {
   user.value = JSON.parse(userStr)
 
   // Sign in anonymously to enable Firebase Storage uploads
-  try {
-    const { signInAnonymously } = await import('firebase/auth')
-    const { auth } = await import('/firebase/config')
-    await signInAnonymously(auth)
-  } catch (error) {
-    console.error('Auth error:', error)
-  }
+  // try {
+  //   const { signInAnonymously } = await import('firebase/auth')
+  //   const { auth } = await import('/firebase/config')
+  //   await signInAnonymously(auth)
+  // } catch (error) {
+  //   console.error('Auth error:', error)
+  // }
 
   try {
     game.value = await getActiveGame()
