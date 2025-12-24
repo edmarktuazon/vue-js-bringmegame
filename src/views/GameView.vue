@@ -214,9 +214,37 @@ const nextPromptIndex = computed(() => {
 })
 
 // Handling photo upload
+// Handling photo upload
 const handlePhotoSelect = (promptIndex, e) => {
   const file = e.target.files[0]
-  if (!file) return
+  if (!file) {
+    console.log('No file selected')
+    return
+  }
+
+  // Validate file type
+  const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/heic']
+  const fileType = file.type || 'image/jpeg' // Default kung walang type
+
+  console.log('📸 File selected:', {
+    name: file.name,
+    size: `${(file.size / 1024 / 1024).toFixed(2)}MB`,
+    type: fileType,
+  })
+
+  // Check file size (10MB limit)
+  const maxSize = 10 * 1024 * 1024 // 10MB
+  if (file.size > maxSize) {
+    alert('Photo is too large! Maximum size is 10MB. Please try again.')
+    return
+  }
+
+  // Check if valid image
+  if (!validTypes.includes(fileType) && !file.name.match(/\.(jpg|jpeg|png|webp|heic)$/i)) {
+    alert('Please select a valid image file (JPG, PNG, or WEBP)')
+    return
+  }
+
   selectedPhotoFile.value = file
   handlePhotoUpload(promptIndex)
 }
@@ -228,6 +256,8 @@ const handlePhotoUpload = async (promptIndex) => {
   uploadingPrompt.value = promptIndex
 
   try {
+    console.log('🚀 Starting upload...')
+
     const url = await submitPhoto(
       game.value.id,
       user.value.id,
@@ -235,17 +265,33 @@ const handlePhotoUpload = async (promptIndex) => {
       promptIndex,
       selectedPhotoFile.value,
     )
-    console.log('Upload done:', url)
+
+    console.log('✅ Upload done:', url)
 
     submissions.value = await getUserSubmissions(game.value.id, user.value.id)
-
     selectedPhotoFile.value = null
 
     // Check if all prompts completed
     await checkCompletion()
   } catch (error) {
-    console.error('Upload failed:', error)
-    alert('Upload failed. Please try again.')
+    console.error('❌ Upload failed:', error)
+
+    // More specific error messages
+    let errorMessage = 'Upload failed. '
+
+    if (error.code === 'storage/unauthorized') {
+      errorMessage += 'Permission denied. Please check Firebase Storage rules.'
+    } else if (error.code === 'storage/canceled') {
+      errorMessage += 'Upload was cancelled.'
+    } else if (error.code === 'storage/unknown') {
+      errorMessage += 'Network error. Please check your internet connection.'
+    } else if (error.message.includes('quota')) {
+      errorMessage += 'Storage quota exceeded.'
+    } else {
+      errorMessage += error.message || 'Please try again.'
+    }
+
+    alert(errorMessage)
   } finally {
     uploadingPrompt.value = null
   }
