@@ -20,7 +20,7 @@ const router = useRouter()
 // SHARED STATE
 // ===============================================
 const currentGame = ref(null)
-const allSubmissions = ref([]) // Now only contains current game submissions
+const allSubmissions = ref([])
 const leaderboard = ref([])
 const users = ref(['All Users'])
 const selectedUser = ref('All Users')
@@ -29,7 +29,7 @@ const loadingGame = ref(false)
 const showLogoutModal = ref(false)
 const isLoggingOut = ref(false)
 
-let unsubscribeSubs = null // Only one listener now
+let unsubscribeSubs = null
 
 // ===============================================
 // LIFECYCLE
@@ -186,9 +186,7 @@ const confirmLogout = async () => {
 </script>
 
 <template>
-  <!-- Template remains exactly the same -->
   <div class="min-h-screen bg-soft font-montserrat">
-    <!-- Header -->
     <header class="bg-white shadow-xl px-4 py-4 sticky top-0 z-20">
       <div class="flex justify-between items-center w-full max-w-6xl mx-auto">
         <img :src="BMGLogo" class="w-24 h-12" alt="Bring Me Game Logo" />
@@ -209,7 +207,7 @@ const confirmLogout = async () => {
       </div>
     </header>
 
-    <!-- Main Content -->
+    <!-- Main content -->
     <main class="max-w-6xl mx-auto px-4 py-8">
       <h1 class="text-3xl font-bold text-dark-gray mb-8">Admin Panel</h1>
 
@@ -229,7 +227,7 @@ const confirmLogout = async () => {
           <PrizeEditorForm :current-game="currentGame" @prize-saved="loadGameData" />
         </div>
 
-        <!-- Right Column -->
+        <!-- Right column -->
         <SubmissionsGallery
           :current-game="currentGame"
           :all-submissions="allSubmissions"
@@ -239,7 +237,7 @@ const confirmLogout = async () => {
       </div>
     </main>
 
-    <!-- Logout Modal -->
+    <!-- Logout modal -->
     <Transition name="fade">
       <div
         v-if="showLogoutModal"

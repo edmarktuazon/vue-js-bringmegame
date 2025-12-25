@@ -308,7 +308,7 @@ const handleLogout = () => {
   <main class="main min-h-screen bg-soft font-montserrat">
     <NavigationGame @open-exit-modal="showExitGameModal = true" />
 
-    <!-- Loading state -->
+    <!-- Loading State -->
     <div class="max-w-4xl mx-auto px-4 py-8">
       <div v-if="loading" class="flex items-center justify-center py-20">
         <div class="text-center">
@@ -430,7 +430,6 @@ const handleLogout = () => {
     </div>
 
     <!-- Exit game modal -->
-
     <ExitGameModal
       v-model="showExitGameModal"
       :is-logging-out="isLoggingOut"

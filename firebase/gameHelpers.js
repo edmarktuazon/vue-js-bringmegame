@@ -175,7 +175,6 @@ export const createUser = async (instagramHandle, currentGameId = null) => {
       const userDoc = snapshot.docs[0]
       const userData = { id: userDoc.id, ...userDoc.data() }
 
-      // Kung may currentGameId na ipapasa (e.g., from GameView), i-update ang user
       if (currentGameId) {
         await updateDoc(doc(db, 'users', userDoc.id), {
           currentGameId,
@@ -191,7 +190,7 @@ export const createUser = async (instagramHandle, currentGameId = null) => {
     const userRef = doc(collection(db, 'users'))
     const userData = {
       instagramHandle,
-      currentGameId, // ← save it if provided
+      currentGameId,
       hasJoined: true,
       joinedAt: serverTimestamp(),
     }
