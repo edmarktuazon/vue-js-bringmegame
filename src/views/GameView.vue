@@ -344,9 +344,9 @@ const handleLogout = () => {
       <!-- Waiting state -->
       <div
         v-else-if="game?.status === 'waiting' || game?.status === 'starting'"
-        class="grid grid-cols-1 lg:grid-cols-3 gap-6"
+        class="grid grid-cols-1 md:grid-cols-3 gap-6"
       >
-        <div class="grid gap-6 lg:col-span-2">
+        <div class="grid gap-6 md:col-span-2">
           <div class="bg-white rounded-lg shadow-sm p-8 text-center">
             <h2 class="text-2xl font-bold text-dark-gray mb-2">
               Welcome, {{ user?.instagramHandle }}!
@@ -383,9 +383,9 @@ const handleLogout = () => {
                 ></div>
               </div>
             </div>
-            <p class="text-slate text-sm mb-6">
-              The admin will start the game soon. Once the game starts, you'll see prompts and can
-              upload your photos!
+            <p class="text-slate text-sm mb-6 leading-relaxed">
+              The admin will start the game soon. Once the game starts, you'll see countdown
+              30seconds, prompts and upload fields to upload your photos. Break a leg!
             </p>
           </div>
           <!-- Prize -->
@@ -403,13 +403,13 @@ const handleLogout = () => {
                 />
               </div>
               <p class="text-center text-dark-gray font-medium max-w-md">
-                {{ game.prize.description || 'Amazing prize awaits the fastest player!' }}
+                {{ game.prize.description || 'Amazing prize awaits for the fastest player 🚀' }}
               </p>
             </div>
           </div>
         </div>
 
-        <div class="lg:col-span-1" v-if="game?.status === 'waiting' || game?.status === 'starting'">
+        <div class="md:col-span-1" v-if="game?.status === 'waiting' || game?.status === 'starting'">
           <LiveFeed :live-feed="liveFeed" />
         </div>
       </div>

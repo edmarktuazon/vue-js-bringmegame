@@ -48,8 +48,7 @@ const handleCreateGame = async () => {
       <h2 class="text-lg font-semibold text-dark-gray">Create New Game</h2>
     </div>
     <p class="text-xs text-slate mb-4">
-      Enter 3 prompts to start a new game. This will reset the current game and archive the previous
-      one.
+      Enter 3 prompts to start a new game. This will reset the current game.
     </p>
 
     <!-- Prompt input fields -->

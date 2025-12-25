@@ -138,20 +138,19 @@ const handleRejectSubmission = async (submission) => {
           v-model="localSelectedUser"
           class="px-4 py-2 bg-soft text-sm rounded-md border-0 focus:outline-none focus:ring-2 focus:ring-primary cursor-pointer"
         >
-          <option v-for="user in users" :key="user" :value="user">
+          <option v-for="user in users" :key="user" :value="user" class="cursor-pointer">
             {{ user === 'All Users' ? 'All Users' : user }}
           </option>
         </select>
       </div>
     </div>
 
-    <p class="text-xs text-slate mb-4">
-      All submissions from all games. Only current game submissions can be reviewed.
-    </p>
+    <p class="text-xs text-slate mb-4">Only current game submissions can be reviewed.</p>
 
     <!-- Tabs -->
     <div class="flex gap-4 border-b border-light mb-6">
       <button
+        class="cursor-pointer"
         @click="activeTab = 'pending'"
         :class="
           activeTab === 'pending'
@@ -162,6 +161,7 @@ const handleRejectSubmission = async (submission) => {
         Pending ({{ submissionCounts.pending }})
       </button>
       <button
+        class="cursor-pointer"
         @click="activeTab = 'approved'"
         :class="
           activeTab === 'approved'
@@ -172,6 +172,7 @@ const handleRejectSubmission = async (submission) => {
         Approved ({{ submissionCounts.approved }})
       </button>
       <button
+        class="cursor-pointer"
         @click="activeTab = 'rejected'"
         :class="
           activeTab === 'rejected'

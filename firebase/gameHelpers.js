@@ -23,8 +23,6 @@ export const submitPhoto = async (gameId, userId, instagramHandle, promptIndex, 
   try {
     if (!file) throw new Error('No file selected')
 
-    console.log('Raw file:', file.name || 'no name', file.size, file.type || 'no type')
-
     // Force create a new File object with proper name and type
     // This fixes missing/wrong MIME type on mobile camera
     const fixedFile = new File([file], `prompt_${promptIndex}.jpg`, {
@@ -39,7 +37,6 @@ export const submitPhoto = async (gameId, userId, instagramHandle, promptIndex, 
     await uploadBytes(imgRef, fixedFile)
 
     const photoUrl = await getDownloadURL(imgRef)
-    console.log('Upload successful:', photoUrl)
 
     // Save to Firestore
     const submissionRef = doc(db, 'games', gameId, 'submissions', `${userId}_${promptIndex}`)
@@ -196,7 +193,6 @@ export const createUser = async (instagramHandle, currentGameId = null) => {
     }
 
     await setDoc(userRef, userData)
-    console.log('New user created:', userRef.id)
     return { id: userRef.id, ...userData }
   } catch (error) {
     console.error('Error creating/updating user:', error)

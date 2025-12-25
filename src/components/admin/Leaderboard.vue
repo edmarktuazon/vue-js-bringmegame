@@ -21,7 +21,7 @@ defineProps({
     <p class="text-xs text-slate mb-4">Top 10 fastest players who completed all 3 prompts.</p>
 
     <div v-if="leaderboard.length === 0" class="py-8 text-center text-slate text-sm">
-      No players have completed all 3 prompts yet.
+      There are currently no active players.
     </div>
 
     <div v-else class="space-y-3">

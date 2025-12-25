@@ -98,10 +98,9 @@ const handleSavePrize = async () => {
                   d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
                 />
               </svg>
-              Upload Logo
+              Upload your prize Logo here
               <input type="file" accept="image/*" class="hidden" @change="handlePrizeLogoUpload" />
             </label>
-            <p class="text-xs text-slate mt-1">Recommended: Square image, &lt;1MB</p>
           </div>
         </div>
       </div>
@@ -117,7 +116,7 @@ const handleSavePrize = async () => {
       <button
         @click="handleSavePrize"
         :disabled="savingPrize || !currentGame"
-        class="flex items-center justify-center gap-2 w-full bg-primary text-white font-semibold py-3 rounded-md transition-colors hover:bg-primary/90 disabled:opacity-50"
+        class="flex items-center justify-center gap-2 w-full bg-primary text-white font-semibold py-3 rounded-md transition-colors hover:bg-primary/90 disabled:opacity-50 cursor-pointer"
       >
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path
