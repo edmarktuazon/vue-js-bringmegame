@@ -90,7 +90,7 @@ const handleStatusChange = async () => {
         v-model="gameStatus"
         @change="handleStatusChange"
         :disabled="isUpdating"
-        class="w-full px-3 py-2 bg-soft text-sm rounded-md border-0 focus:outline-none focus:ring-2 focus:ring-primary appearance-none cursor-pointer disabled:opacity-50"
+        class="w-full px-3 py-2 bg-soft text-sm rounded-md border-0 focus:outline-none focus:ring-2 focus:ring-primary cursor-pointer disabled:opacity-50"
       >
         <option value="waiting">Waiting</option>
         <option value="active" :disabled="!hasThreePrompts">

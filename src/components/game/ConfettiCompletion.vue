@@ -23,7 +23,7 @@ const fireConfetti = () => {
     scalar: 1.2,
   })
 
-  // Side bursts
+  // Side burst
   confetti({
     particleCount: 50,
     angle: 60,

@@ -63,10 +63,9 @@ defineProps({
               {{ entry.rank }}<sup>th</sup>
             </div>
           </div>
-          <div>
-            <p class="font-semibold text-dark-gray">{{ entry.instagramHandle }}</p>
-            <p class="text-xs text-slate">Completed all 3 prompts</p>
-          </div>
+          <h3 class="font-semibold text-dark-gray break-all">
+            {{ entry.instagramHandle }}
+          </h3>
         </div>
         <div class="text-right">
           <p class="text-lg font-bold text-dark-gray">{{ entry.formattedTime }}</p>

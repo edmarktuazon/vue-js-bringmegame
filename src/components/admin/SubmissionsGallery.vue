@@ -113,15 +113,13 @@ const handleRejectSubmission = async (submission) => {
 </script>
 
 <template>
-  <!-- Same template as before — no changes needed -->
   <div
     class="bg-white rounded-lg shadow-sm p-6"
     style="max-height: calc(100vh - 200px); overflow-y: auto"
   >
-    <!-- ... rest of template exactly the same ... -->
     <div class="flex items-center justify-between mb-4">
       <div class="flex items-center gap-2">
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg class="w-auto h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path
             stroke-linecap="round"
             stroke-linejoin="round"
@@ -222,7 +220,6 @@ const handleRejectSubmission = async (submission) => {
 
         <img :src="sub.photoUrl" alt="Submission" class="w-full h-52 object-cover rounded-md" />
 
-        <!-- Buttons only show if still pending -->
         <div
           v-if="isCurrentGameSubmission(sub) && sub.status === 'pending'"
           class="flex gap-3 mt-4"

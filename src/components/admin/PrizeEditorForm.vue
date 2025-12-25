@@ -60,7 +60,6 @@ const handleSavePrize = async () => {
 
     <div class="space-y-4">
       <div>
-        <label class="block text-sm font-medium text-dark-gray mb-2">Prize Logo</label>
         <div class="flex items-center gap-4">
           <div
             class="w-16 h-16 bg-soft rounded-md flex items-center justify-center overflow-hidden"
@@ -82,15 +81,22 @@ const handleSavePrize = async () => {
                 stroke-linecap="round"
                 stroke-linejoin="round"
                 stroke-width="2"
-                d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
+                d="M3 5a2 2 0 012-2h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5z"
               />
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M3 15l5-5a2 2 0 012.8 0l3.4 3.4a2 2 0 002.8 0L21 9"
+              />
+              <circle cx="9" cy="8" r="1.5" fill="currentColor" />
             </svg>
           </div>
           <div>
             <label
               class="flex items-center gap-2 px-4 py-2 bg-soft text-dark-gray text-sm rounded-md cursor-pointer hover:bg-light transition"
             >
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg class="w-auto h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
                   stroke-linecap="round"
                   stroke-linejoin="round"
