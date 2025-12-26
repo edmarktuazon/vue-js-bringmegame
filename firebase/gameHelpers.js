@@ -70,27 +70,20 @@ export const submitPhoto = async (gameId, userId, instagramHandle, promptIndex, 
   try {
     if (!file) throw new Error('No file selected')
 
+    console.log('⚡ Starting FAST upload')
+
     const options = {
-      maxSizeMB: 0.3, // 300KB max - much smaller!
-      maxWidthOrHeight: 800, // Smaller dimension for speed
+      maxSizeMB: 0.3,
+      maxWidthOrHeight: 800,
       useWebWorker: true,
       fileType: 'image/jpeg',
-      initialQuality: 0.7, // Lower quality = faster
+      initialQuality: 0.7,
     }
 
-    const [compressedFile] = await Promise.all([
-      imageCompression(file, options),
-      // Ensure auth is ready
-      (async () => {
-        const { auth } = await import('/firebase/config')
-        if (!auth.currentUser) {
-          const { signInAnonymously } = await import('firebase/auth')
-          await signInAnonymously(auth)
-        }
-      })(),
-    ])
+    const compressedFile = await imageCompression(file, options)
 
     console.log('✅ Compressed to:', (compressedFile.size / 1024).toFixed(0) + 'KB')
+
     const timestamp = Date.now()
     const filePath = `submissions/${gameId}/${userId}/${promptIndex}_${timestamp}.jpg`
     const imgRef = storageRef(storage, filePath)
@@ -99,7 +92,7 @@ export const submitPhoto = async (gameId, userId, instagramHandle, promptIndex, 
       // Upload to storage
       uploadBytes(imgRef, compressedFile, {
         contentType: 'image/jpeg',
-        cacheControl: 'public, max-age=31536000', // Cache for 1 year
+        cacheControl: 'public, max-age=31536000',
       }).then(() => getDownloadURL(imgRef)),
 
       setDoc(
@@ -110,7 +103,6 @@ export const submitPhoto = async (gameId, userId, instagramHandle, promptIndex, 
           instagramHandle,
           promptIndex: Number(promptIndex),
           photoUrl: 'uploading...',
-          status: 'pending',
           createdAt: serverTimestamp(),
           uploadedAt: serverTimestamp(),
         },

@@ -72,8 +72,6 @@ const handleSubmit = async (e) => {
       }),
     )
 
-    console.log('✅ User joined game:', handle)
-
     router.push('/game')
   } catch (error) {
     console.error('❌ Error joining game:', error)

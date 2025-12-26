@@ -6,6 +6,7 @@ import {
   getUserSubmissions,
   submitPhoto,
   getUserCompletionTime,
+  createLocalPreview,
 } from '/firebase/gameHelpers'
 import { db } from '/firebase/config'
 import {
@@ -27,43 +28,25 @@ import GameEnded from '../components/game/GameEnded.vue'
 import ExitGameModal from '../components/game/ExitGameModal.vue'
 import CompletionModal from '../components/game/CompletionModal.vue'
 
-// routes
 const router = useRouter()
 
-// Player
 const user = ref(null)
-
-// Actual game
 const game = ref(null)
-
-// Submission
 const submissions = ref({})
-
-// Loading state
 const loading = ref(true)
-
-// Prompt uploading
 const uploadingPrompt = ref(null)
-
-// Selected photo
 const selectedPhotoFile = ref(null)
 
-// Live users
-const liveFeed = ref([])
+// ⚡ Local preview URLs for instant display
+const localPreviews = ref({})
 
+const liveFeed = ref([])
 const showExitGameModal = ref(false)
 const isLoggingOut = ref(false)
-
-// Countdown state
 const showCountdown = ref(false)
 const countdown = ref(30)
 const countdownInterval = ref(null)
-
-// Timer state
-
 const timerInterval = ref(null)
-
-// Completion modal
 const showCompletionModal = ref(false)
 const completionTime = ref(null)
 
@@ -79,15 +62,6 @@ onMounted(async () => {
 
   user.value = JSON.parse(userStr)
 
-  // Sign in anonymously to enable Firebase Storage uploads
-  // try {
-  //   const { signInAnonymously } = await import('firebase/auth')
-  //   const { auth } = await import('/firebase/config')
-  //   await signInAnonymously(auth)
-  // } catch (error) {
-  //   console.error('Auth error:', error)
-  // }
-
   try {
     game.value = await getActiveGame()
 
@@ -97,7 +71,6 @@ onMounted(async () => {
       return
     }
 
-    // === NEW: Update user's currentGameId ===
     await updateDoc(doc(db, 'users', user.value.id), {
       currentGameId: game.value.id,
       hasJoined: true,
@@ -126,9 +99,13 @@ onUnmounted(() => {
   if (unsubscribeFeed) unsubscribeFeed()
   if (countdownInterval.value) clearInterval(countdownInterval.value)
   if (timerInterval.value) clearInterval(timerInterval.value)
+
+  // Cleanup local preview URLs
+  Object.values(localPreviews.value).forEach((url) => {
+    URL.revokeObjectURL(url)
+  })
 })
 
-// Watch for game status change to active
 watch(
   () => game.value?.status,
   (newStatus, oldStatus) => {
@@ -138,7 +115,6 @@ watch(
   },
 )
 
-// Game countdown
 const startCountdown = () => {
   showCountdown.value = true
   countdown.value = 30
@@ -152,7 +128,6 @@ const startCountdown = () => {
   }, 1000)
 }
 
-// Checking of completion of prompt
 const checkCompletion = async () => {
   const submittedCount = Object.keys(submissions.value).length
 
@@ -161,7 +136,6 @@ const checkCompletion = async () => {
       clearInterval(timerInterval.value)
     }
 
-    // Get completion time from server
     const result = await getUserCompletionTime(game.value.id, user.value.id)
 
     if (result) {
@@ -171,7 +145,6 @@ const checkCompletion = async () => {
   }
 }
 
-// Snapshot of game
 const setupGameListener = () => {
   if (!game.value) return
   const q = query(collection(db, 'games'), where('isActive', '==', true))
@@ -182,7 +155,6 @@ const setupGameListener = () => {
   })
 }
 
-// User live feed — current game only
 const setupLiveFeedListener = () => {
   if (!game.value?.id) {
     liveFeed.value = []
@@ -204,7 +176,6 @@ const setupLiveFeedListener = () => {
   })
 }
 
-// Index of the next prompt user should upload
 const nextPromptIndex = computed(() => {
   if (!game.value || !submissions.value) return 0
   for (let i = 0; i < game.value.prompts.length; i++) {
@@ -213,89 +184,112 @@ const nextPromptIndex = computed(() => {
   return null
 })
 
-// Handling photo upload
-// Handling photo upload
 const handlePhotoSelect = (promptIndex, e) => {
   const file = e.target.files[0]
-  if (!file) {
-    console.log('No file selected')
-    return
-  }
+
+  if (!file) return
 
   // Validate file type
-  const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/heic']
-  const fileType = file.type || 'image/jpeg' // Default kung walang type
-
-  console.log('📸 File selected:', {
-    name: file.name,
-    size: `${(file.size / 1024 / 1024).toFixed(2)}MB`,
-    type: fileType,
-  })
-
-  // Check file size (10MB limit)
-  const maxSize = 10 * 1024 * 1024 // 10MB
-  if (file.size > maxSize) {
-    alert('Photo is too large! Maximum size is 10MB. Please try again.')
+  const validTypes = [
+    'image/jpeg',
+    'image/jpg',
+    'image/png',
+    'image/webp',
+    'image/heic',
+    'image/heif',
+  ]
+  if (!validTypes.includes(file.type.toLowerCase())) {
+    alert(`Invalid file type: ${file.type}\nPlease select a valid image.`)
+    e.target.value = ''
     return
   }
 
-  // Check if valid image
-  if (!validTypes.includes(fileType) && !file.name.match(/\.(jpg|jpeg|png|webp|heic)$/i)) {
-    alert('Please select a valid image file (JPG, PNG, or WEBP)')
+  const maxSize = 10 * 1024 * 1024
+  if (file.size > maxSize) {
+    alert(`File too large (${(file.size / 1024 / 1024).toFixed(2)}MB)\nMax size: 10MB`)
+    e.target.value = ''
     return
+  }
+
+  const previewUrl = createLocalPreview(file)
+  localPreviews.value[promptIndex] = previewUrl
+
+  submissions.value[promptIndex] = {
+    promptIndex,
+    photoUrl: previewUrl,
+    status: 'uploading',
+    local: true,
   }
 
   selectedPhotoFile.value = file
-  handlePhotoUpload(promptIndex)
+
+  handlePhotoUpload(promptIndex, file)
 }
 
-// Handling photo upload
-const handlePhotoUpload = async (promptIndex) => {
-  if (!selectedPhotoFile.value) return
+const handlePhotoUpload = async (promptIndex, file) => {
+  if (!file) return
 
   uploadingPrompt.value = promptIndex
 
   try {
+    console.log('⚡ Starting fast upload...')
+
     const url = await submitPhoto(
       game.value.id,
       user.value.id,
       user.value.instagramHandle,
       promptIndex,
-      selectedPhotoFile.value,
+      file,
     )
 
-    console.log('✅ Upload done:', url)
+    console.log('✅ Upload complete!')
 
-    submissions.value = await getUserSubmissions(game.value.id, user.value.id)
+    submissions.value[promptIndex] = {
+      promptIndex,
+      photoUrl: url,
+      status: 'pending',
+      local: false,
+    }
+
+    if (localPreviews.value[promptIndex]) {
+      URL.revokeObjectURL(localPreviews.value[promptIndex])
+      delete localPreviews.value[promptIndex]
+    }
+
     selectedPhotoFile.value = null
 
-    // Check if all prompts completed
+    // Check completion
     await checkCompletion()
   } catch (error) {
     console.error('❌ Upload failed:', error)
 
-    // More specific error messages
-    let errorMessage = 'Upload failed. '
+    delete submissions.value[promptIndex]
+    if (localPreviews.value[promptIndex]) {
+      URL.revokeObjectURL(localPreviews.value[promptIndex])
+      delete localPreviews.value[promptIndex]
+    }
+
+    let errorMessage = '❌ Upload Failed\n\n'
 
     if (error.code === 'storage/unauthorized') {
-      errorMessage += 'Permission denied. Please check Firebase Storage rules.'
-    } else if (error.code === 'storage/canceled') {
-      errorMessage += 'Upload was cancelled.'
-    } else if (error.code === 'storage/unknown') {
-      errorMessage += 'Network error. Please check your internet connection.'
-    } else if (error.message.includes('quota')) {
-      errorMessage += 'Storage quota exceeded.'
+      errorMessage += 'Permission denied. Please refresh and try again.'
+    } else if (error.code === 'storage/quota-exceeded') {
+      errorMessage += 'Storage limit reached. Please contact support.'
+    } else if (error.message?.includes('network') || error.message?.includes('fetch')) {
+      errorMessage += 'Network error. Check your connection and try again.'
+    } else if (error.message?.includes('compression')) {
+      errorMessage += 'Image processing failed. Try a different photo.'
     } else {
-      errorMessage += error.message || 'Please try again.'
+      errorMessage += error.message || 'Unknown error. Please try again.'
     }
 
     alert(errorMessage)
+    selectedPhotoFile.value = null
   } finally {
     uploadingPrompt.value = null
   }
 }
 
-// Logout session
 const handleLogout = () => {
   localStorage.removeItem('bmg_user')
   router.push('/')
@@ -306,7 +300,6 @@ const handleLogout = () => {
   <main class="main min-h-screen bg-soft font-montserrat">
     <NavigationGame @open-exit-modal="showExitGameModal = true" />
 
-    <!-- Loading State -->
     <div class="max-w-4xl mx-auto px-4 py-8">
       <div v-if="loading" class="flex items-center justify-center py-20">
         <div class="text-center">
@@ -333,18 +326,16 @@ const handleLogout = () => {
         </div>
       </div>
 
-      <!-- Countdown state -->
       <CountdownOverlay
         v-else-if="showCountdown && game?.status === 'active'"
         :countdown="countdown"
       />
 
-      <!-- Waiting state -->
       <div
         v-else-if="game?.status === 'waiting' || game?.status === 'starting'"
-        class="grid grid-cols-1 md:grid-cols-3 gap-6"
+        class="grid grid-cols-1 lg:grid-cols-3 gap-6"
       >
-        <div class="grid gap-6 md:col-span-2">
+        <div class="grid gap-6 lg:col-span-2">
           <div class="bg-white rounded-lg shadow-sm p-8 text-center">
             <h2 class="text-2xl font-bold text-dark-gray mb-2">
               Welcome, {{ user?.instagramHandle }}!
@@ -381,12 +372,12 @@ const handleLogout = () => {
                 ></div>
               </div>
             </div>
-            <p class="text-slate text-sm mb-6 leading-relaxed">
-              The admin will start the game soon. Once the game starts, you'll see countdown
-              30seconds, prompts and upload fields to upload your photos. Break a leg!
+            <p class="text-slate text-sm mb-6">
+              The admin will start the game soon. Once the game starts, you'll see prompts and can
+              upload your photos!
             </p>
           </div>
-          <!-- Prize -->
+
           <div v-if="game?.prize" class="bg-white rounded-lg shadow-sm p-6">
             <h3 class="text-lg font-semibold text-dark-gray mb-4 text-center">Today's Prize</h3>
             <div class="flex flex-col items-center gap-4">
@@ -401,18 +392,17 @@ const handleLogout = () => {
                 />
               </div>
               <p class="text-center text-dark-gray font-medium max-w-md">
-                {{ game.prize.description || 'Amazing prize awaits for the fastest player 🚀' }}
+                {{ game.prize.description || 'Amazing prize awaits the fastest player!' }}
               </p>
             </div>
           </div>
         </div>
 
-        <div class="md:col-span-1" v-if="game?.status === 'waiting' || game?.status === 'starting'">
+        <div class="lg:col-span-1" v-if="game?.status === 'waiting' || game?.status === 'starting'">
           <LiveFeed :live-feed="liveFeed" />
         </div>
       </div>
 
-      <!-- Active game -->
       <ActiveActualGame
         v-else-if="game?.status === 'active' && !showCountdown"
         :game="game"
@@ -423,18 +413,15 @@ const handleLogout = () => {
         @photo-select="handlePhotoSelect"
       />
 
-      <!-- End game -->
       <GameEnded v-else-if="game?.status === 'ended'" @logout="handleLogout" />
     </div>
 
-    <!-- Exit game modal -->
     <ExitGameModal
       v-model="showExitGameModal"
       :is-logging-out="isLoggingOut"
       @confirm="handleLogout"
     />
 
-    <!-- Final completion -->
     <CompletionModal
       v-model="showCompletionModal"
       :completion-time="completionTime"
