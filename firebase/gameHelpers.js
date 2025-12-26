@@ -17,60 +17,11 @@ import {
 } from 'firebase/firestore'
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage'
 
-// ============================================
-// GAME FUNCTIONS
-// ============================================
-// export const submitPhoto = async (gameId, userId, instagramHandle, promptIndex, file) => {
-//   try {
-//     if (!file) throw new Error('No file selected')
-
-//     // Force create a new File object with proper name and type
-//     // This fixes missing/wrong MIME type on mobile camera
-//     const fixedFile = new File([file], `prompt_${promptIndex}.jpg`, {
-//       type: 'image/jpeg',
-//       lastModified: Date.now(),
-//     })
-
-//     const filePath = `submissions/${gameId}/${userId}/prompt_${promptIndex}.jpg`
-//     const imgRef = storageRef(storage, filePath)
-
-//     // Upload directly (no compression needed for reliability)
-//     await uploadBytes(imgRef, fixedFile)
-
-//     const photoUrl = await getDownloadURL(imgRef)
-
-//     // Save to Firestore
-//     const submissionRef = doc(db, 'games', gameId, 'submissions', `${userId}_${promptIndex}`)
-
-//     await setDoc(
-//       submissionRef,
-//       {
-//         gameId,
-//         userId,
-//         instagramHandle,
-//         promptIndex,
-//         photoUrl,
-//         status: 'pending',
-//         createdAt: serverTimestamp(),
-//         uploadedAt: serverTimestamp(),
-//       },
-//       { merge: true },
-//     )
-
-//     return photoUrl
-//   } catch (error) {
-//     console.error('Upload failed:', error)
-//     console.error('Error code:', error.code)
-//     console.error('Error message:', error.message)
-//     throw error
-//   }
-// }
-
 export const submitPhoto = async (gameId, userId, instagramHandle, promptIndex, file) => {
   try {
     if (!file) throw new Error('No file selected')
 
-    console.log('⚡ Starting FAST upload')
+    console.log('⚡ Starting upload for prompt', promptIndex)
 
     const options = {
       maxSizeMB: 0.3,
@@ -81,47 +32,51 @@ export const submitPhoto = async (gameId, userId, instagramHandle, promptIndex, 
     }
 
     const compressedFile = await imageCompression(file, options)
+    console.log('✅ Compressed:', (compressedFile.size / 1024).toFixed(0) + 'KB')
 
-    console.log('✅ Compressed to:', (compressedFile.size / 1024).toFixed(0) + 'KB')
-
+    // Upload to Storage
     const timestamp = Date.now()
     const filePath = `submissions/${gameId}/${userId}/${promptIndex}_${timestamp}.jpg`
     const imgRef = storageRef(storage, filePath)
 
-    const [photoUrl] = await Promise.all([
-      // Upload to storage
-      uploadBytes(imgRef, compressedFile, {
-        contentType: 'image/jpeg',
-        cacheControl: 'public, max-age=31536000',
-      }).then(() => getDownloadURL(imgRef)),
+    console.log('📤 Uploading to:', filePath)
 
-      setDoc(
-        doc(db, 'games', gameId, 'submissions', `${userId}_${promptIndex}`),
-        {
-          gameId,
-          userId,
-          instagramHandle,
-          promptIndex: Number(promptIndex),
-          photoUrl: 'uploading...',
-          createdAt: serverTimestamp(),
-          uploadedAt: serverTimestamp(),
-        },
-        { merge: true },
-      ),
-    ])
+    await uploadBytes(imgRef, compressedFile, {
+      contentType: 'image/jpeg',
+      cacheControl: 'public, max-age=31536000',
+    })
 
-    await setDoc(
-      doc(db, 'games', gameId, 'submissions', `${userId}_${promptIndex}`),
-      {
-        photoUrl,
-      },
-      { merge: true },
-    )
+    const photoUrl = await getDownloadURL(imgRef)
+    console.log('✅ Upload successful, URL:', photoUrl)
 
-    console.log('⚡ Fast upload complete!')
+    const submissionsRef = collection(db, 'games', gameId, 'submissions')
+
+    const submissionData = {
+      gameId,
+      userId,
+      instagramHandle,
+      promptIndex: Number(promptIndex),
+      photoUrl,
+      status: 'pending',
+      createdAt: serverTimestamp(),
+      uploadedAt: serverTimestamp(),
+    }
+
+    const submissionId = `${userId}_${promptIndex}`
+    const submissionDocRef = doc(db, 'games', gameId, 'submissions', submissionId)
+
+    try {
+      await setDoc(submissionDocRef, submissionData, { merge: true })
+      console.log('✅ Firestore saved with ID:', submissionId)
+    } catch (firestoreError) {
+      console.error('❌ Firestore error:', firestoreError)
+
+      console.log('⚠️ Photo uploaded but Firestore save failed')
+    }
+
     return photoUrl
   } catch (error) {
-    console.error('Upload failed:', error)
+    console.error('❌ Upload failed:', error)
     throw error
   }
 }
@@ -130,22 +85,32 @@ export const createLocalPreview = (file) => {
   return URL.createObjectURL(file)
 }
 
-export const preCompressImage = async (file) => {
+export const getUserSubmissions = async (gameId, userId) => {
   try {
-    const options = {
-      maxSizeMB: 0.3,
-      maxWidthOrHeight: 800,
-      useWebWorker: true,
-      fileType: 'image/jpeg',
-      initialQuality: 0.7,
-    }
+    console.log('📥 Getting submissions for:', { gameId, userId })
 
-    return await imageCompression(file, options)
+    const q = query(collection(db, 'games', gameId, 'submissions'), where('userId', '==', userId))
+
+    const snapshot = await getDocs(q)
+    console.log('📊 Found', snapshot.size, 'submissions')
+
+    const result = {}
+
+    snapshot.forEach((doc) => {
+      const data = doc.data()
+      result[data.promptIndex] = {
+        id: doc.id,
+        ...data,
+      }
+    })
+
+    return result
   } catch (error) {
-    console.error('Pre-compression failed:', error)
-    return file
+    console.error('❌ Error getting submissions:', error)
+    return {}
   }
 }
+
 export const getActiveGame = async () => {
   try {
     const q = query(collection(db, 'games'), where('isActive', '==', true), limit(1))
@@ -241,10 +206,6 @@ export const updatePrize = async (gameId, description, logoFile) => {
   }
 }
 
-// ============================================
-// USER FUNCTIONS
-// ============================================
-
 export const createUser = async (instagramHandle, currentGameId = null) => {
   try {
     const q = query(collection(db, 'users'), where('instagramHandle', '==', instagramHandle))
@@ -265,7 +226,6 @@ export const createUser = async (instagramHandle, currentGameId = null) => {
       return userData
     }
 
-    // New user
     const userRef = doc(collection(db, 'users'))
     const userData = {
       instagramHandle,
@@ -275,12 +235,14 @@ export const createUser = async (instagramHandle, currentGameId = null) => {
     }
 
     await setDoc(userRef, userData)
+    console.log('New user created:', userRef.id)
     return { id: userRef.id, ...userData }
   } catch (error) {
     console.error('Error creating/updating user:', error)
     throw error
   }
 }
+
 export const updateUserCurrentGame = async (userId, gameId) => {
   try {
     await updateDoc(doc(db, 'users', userId), {
@@ -290,33 +252,6 @@ export const updateUserCurrentGame = async (userId, gameId) => {
     })
   } catch (error) {
     console.error('Error updating user game:', error)
-    throw error
-  }
-}
-
-// ============================================
-// SUBMISSION FUNCTIONS
-// ============================================
-
-export const getUserSubmissions = async (gameId, userId) => {
-  try {
-    const q = query(collection(db, 'games', gameId, 'submissions'), where('userId', '==', userId))
-
-    const snapshot = await getDocs(q)
-
-    const result = {}
-
-    snapshot.forEach((doc) => {
-      const data = doc.data()
-      result[data.promptIndex] = {
-        id: doc.id,
-        ...data,
-      }
-    })
-
-    return result
-  } catch (error) {
-    console.error('Error getting user submissions:', error)
     throw error
   }
 }
@@ -414,10 +349,6 @@ export const updateSubmissionStatus = async (gameId, submissionId, status, admin
     throw error
   }
 }
-
-// ============================================
-// LEADERBOARD
-// ============================================
 
 export const getLeaderboard = async (gameId, onlyApproved = false) => {
   try {

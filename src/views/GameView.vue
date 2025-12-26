@@ -62,6 +62,8 @@ onMounted(async () => {
 
   user.value = JSON.parse(userStr)
 
+  // ✅ NO AUTH NEEDED - Storage rules don't require it
+
   try {
     game.value = await getActiveGame()
 
@@ -184,6 +186,7 @@ const nextPromptIndex = computed(() => {
   return null
 })
 
+// ⚡ OPTIMIZED: Instant photo select with preview
 const handlePhotoSelect = (promptIndex, e) => {
   const file = e.target.files[0]
 
@@ -204,6 +207,7 @@ const handlePhotoSelect = (promptIndex, e) => {
     return
   }
 
+  // Validate file size (10MB max based on your storage rules)
   const maxSize = 10 * 1024 * 1024
   if (file.size > maxSize) {
     alert(`File too large (${(file.size / 1024 / 1024).toFixed(2)}MB)\nMax size: 10MB`)
@@ -211,9 +215,11 @@ const handlePhotoSelect = (promptIndex, e) => {
     return
   }
 
+  // ⚡ CREATE LOCAL PREVIEW IMMEDIATELY
   const previewUrl = createLocalPreview(file)
   localPreviews.value[promptIndex] = previewUrl
 
+  // ⚡ ADD TO SUBMISSIONS IMMEDIATELY for instant display
   submissions.value[promptIndex] = {
     promptIndex,
     photoUrl: previewUrl,
@@ -223,16 +229,18 @@ const handlePhotoSelect = (promptIndex, e) => {
 
   selectedPhotoFile.value = file
 
+  // Upload in background
   handlePhotoUpload(promptIndex, file)
 }
 
+// ⚡ OPTIMIZED: Fast background upload with better refresh
 const handlePhotoUpload = async (promptIndex, file) => {
   if (!file) return
 
   uploadingPrompt.value = promptIndex
 
   try {
-    console.log('⚡ Starting fast upload...')
+    console.log('⚡ Starting fast upload for prompt', promptIndex)
 
     const url = await submitPhoto(
       game.value.id,
@@ -242,8 +250,9 @@ const handlePhotoUpload = async (promptIndex, file) => {
       file,
     )
 
-    console.log('✅ Upload complete!')
+    console.log('✅ Upload complete! URL:', url)
 
+    // ⚡ UPDATE with real Firebase URL
     submissions.value[promptIndex] = {
       promptIndex,
       photoUrl: url,
@@ -251,6 +260,7 @@ const handlePhotoUpload = async (promptIndex, file) => {
       local: false,
     }
 
+    // Cleanup local preview
     if (localPreviews.value[promptIndex]) {
       URL.revokeObjectURL(localPreviews.value[promptIndex])
       delete localPreviews.value[promptIndex]
@@ -258,11 +268,23 @@ const handlePhotoUpload = async (promptIndex, file) => {
 
     selectedPhotoFile.value = null
 
+    // ✅ Force refresh submissions from Firestore to ensure sync
+    console.log('🔄 Refreshing all submissions from server...')
+    const freshSubmissions = await getUserSubmissions(game.value.id, user.value.id)
+    submissions.value = { ...freshSubmissions }
+    console.log('✅ Submissions refreshed:', Object.keys(submissions.value).length, 'total')
+
     // Check completion
     await checkCompletion()
   } catch (error) {
-    console.error('❌ Upload failed:', error)
+    console.error('❌ Upload failed:', {
+      message: error.message,
+      code: error.code,
+      promptIndex,
+      error,
+    })
 
+    // Remove failed upload from display
     delete submissions.value[promptIndex]
     if (localPreviews.value[promptIndex]) {
       URL.revokeObjectURL(localPreviews.value[promptIndex])
@@ -271,8 +293,8 @@ const handlePhotoUpload = async (promptIndex, file) => {
 
     let errorMessage = '❌ Upload Failed\n\n'
 
-    if (error.code === 'storage/unauthorized') {
-      errorMessage += 'Permission denied. Please refresh and try again.'
+    if (error.code === 'storage/unauthorized' || error.message?.includes('permission')) {
+      errorMessage += 'Permission denied. Please refresh the page and try again.'
     } else if (error.code === 'storage/quota-exceeded') {
       errorMessage += 'Storage limit reached. Please contact support.'
     } else if (error.message?.includes('network') || error.message?.includes('fetch')) {
@@ -283,6 +305,7 @@ const handlePhotoUpload = async (promptIndex, file) => {
       errorMessage += error.message || 'Unknown error. Please try again.'
     }
 
+    console.error('🚨 Showing error to user:', errorMessage)
     alert(errorMessage)
     selectedPhotoFile.value = null
   } finally {
