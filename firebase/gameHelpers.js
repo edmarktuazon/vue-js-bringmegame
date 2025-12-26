@@ -1,4 +1,5 @@
 import { db, storage } from '/firebase/config'
+import imageCompression from 'browser-image-compression'
 import {
   collection,
   doc,
@@ -19,49 +20,138 @@ import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage
 // ============================================
 // GAME FUNCTIONS
 // ============================================
+// export const submitPhoto = async (gameId, userId, instagramHandle, promptIndex, file) => {
+//   try {
+//     if (!file) throw new Error('No file selected')
+
+//     // Force create a new File object with proper name and type
+//     // This fixes missing/wrong MIME type on mobile camera
+//     const fixedFile = new File([file], `prompt_${promptIndex}.jpg`, {
+//       type: 'image/jpeg',
+//       lastModified: Date.now(),
+//     })
+
+//     const filePath = `submissions/${gameId}/${userId}/prompt_${promptIndex}.jpg`
+//     const imgRef = storageRef(storage, filePath)
+
+//     // Upload directly (no compression needed for reliability)
+//     await uploadBytes(imgRef, fixedFile)
+
+//     const photoUrl = await getDownloadURL(imgRef)
+
+//     // Save to Firestore
+//     const submissionRef = doc(db, 'games', gameId, 'submissions', `${userId}_${promptIndex}`)
+
+//     await setDoc(
+//       submissionRef,
+//       {
+//         gameId,
+//         userId,
+//         instagramHandle,
+//         promptIndex,
+//         photoUrl,
+//         status: 'pending',
+//         createdAt: serverTimestamp(),
+//         uploadedAt: serverTimestamp(),
+//       },
+//       { merge: true },
+//     )
+
+//     return photoUrl
+//   } catch (error) {
+//     console.error('Upload failed:', error)
+//     console.error('Error code:', error.code)
+//     console.error('Error message:', error.message)
+//     throw error
+//   }
+// }
+
 export const submitPhoto = async (gameId, userId, instagramHandle, promptIndex, file) => {
   try {
     if (!file) throw new Error('No file selected')
 
-    // Force create a new File object with proper name and type
-    // This fixes missing/wrong MIME type on mobile camera
-    const fixedFile = new File([file], `prompt_${promptIndex}.jpg`, {
-      type: 'image/jpeg',
-      lastModified: Date.now(),
-    })
+    const options = {
+      maxSizeMB: 0.3, // 300KB max - much smaller!
+      maxWidthOrHeight: 800, // Smaller dimension for speed
+      useWebWorker: true,
+      fileType: 'image/jpeg',
+      initialQuality: 0.7, // Lower quality = faster
+    }
 
-    const filePath = `submissions/${gameId}/${userId}/prompt_${promptIndex}.jpg`
+    const [compressedFile] = await Promise.all([
+      imageCompression(file, options),
+      // Ensure auth is ready
+      (async () => {
+        const { auth } = await import('/firebase/config')
+        if (!auth.currentUser) {
+          const { signInAnonymously } = await import('firebase/auth')
+          await signInAnonymously(auth)
+        }
+      })(),
+    ])
+
+    console.log('✅ Compressed to:', (compressedFile.size / 1024).toFixed(0) + 'KB')
+    const timestamp = Date.now()
+    const filePath = `submissions/${gameId}/${userId}/${promptIndex}_${timestamp}.jpg`
     const imgRef = storageRef(storage, filePath)
 
-    // Upload directly (no compression needed for reliability)
-    await uploadBytes(imgRef, fixedFile)
+    const [photoUrl] = await Promise.all([
+      // Upload to storage
+      uploadBytes(imgRef, compressedFile, {
+        contentType: 'image/jpeg',
+        cacheControl: 'public, max-age=31536000', // Cache for 1 year
+      }).then(() => getDownloadURL(imgRef)),
 
-    const photoUrl = await getDownloadURL(imgRef)
-
-    // Save to Firestore
-    const submissionRef = doc(db, 'games', gameId, 'submissions', `${userId}_${promptIndex}`)
+      setDoc(
+        doc(db, 'games', gameId, 'submissions', `${userId}_${promptIndex}`),
+        {
+          gameId,
+          userId,
+          instagramHandle,
+          promptIndex: Number(promptIndex),
+          photoUrl: 'uploading...',
+          status: 'pending',
+          createdAt: serverTimestamp(),
+          uploadedAt: serverTimestamp(),
+        },
+        { merge: true },
+      ),
+    ])
 
     await setDoc(
-      submissionRef,
+      doc(db, 'games', gameId, 'submissions', `${userId}_${promptIndex}`),
       {
-        gameId,
-        userId,
-        instagramHandle,
-        promptIndex,
         photoUrl,
-        status: 'pending',
-        createdAt: serverTimestamp(),
-        uploadedAt: serverTimestamp(),
       },
       { merge: true },
     )
 
+    console.log('⚡ Fast upload complete!')
     return photoUrl
   } catch (error) {
     console.error('Upload failed:', error)
-    console.error('Error code:', error.code)
-    console.error('Error message:', error.message)
     throw error
+  }
+}
+
+export const createLocalPreview = (file) => {
+  return URL.createObjectURL(file)
+}
+
+export const preCompressImage = async (file) => {
+  try {
+    const options = {
+      maxSizeMB: 0.3,
+      maxWidthOrHeight: 800,
+      useWebWorker: true,
+      fileType: 'image/jpeg',
+      initialQuality: 0.7,
+    }
+
+    return await imageCompression(file, options)
+  } catch (error) {
+    console.error('Pre-compression failed:', error)
+    return file
   }
 }
 export const getActiveGame = async () => {
