@@ -35,16 +35,17 @@ const isCompleted = computed(() => {
     <!-- Upload -->
     <div v-if="nextPromptIndex !== null" class="space-y-4">
       <div class="bg-white rounded-lg shadow-sm p-12">
-        <h4 class="text-dark-gray mb-6 text-center font-bold text-2xl">
-          Bring me: {{ props.game?.prompts?.[nextPromptIndex] }}
+        <h4 class="text-dark-gray mb-6 text-center text-md font-medium">
+          Bring me:
+          <span class="text-primary"
+            ><strong>{{ props.game?.prompts?.[nextPromptIndex] }}</strong></span
+          >
         </h4>
 
         <label
           :class="[
-            'flex flex-col items-center justify-center gap-4 w-full px-6 py-8 border-2 border-dashed rounded-xl cursor-pointer transition h-56',
-            uploadingPrompt === nextPromptIndex
-              ? 'border-primary bg-primary/10'
-              : 'border-slate hover:border-primary hover:bg-primary/10',
+            'flex flex-col items-center justify-center gap-4 w-full px-6 py-8 border-2 border-dashed rounded-xl cursor-pointer transition h-56 bg-primary/20 text-white border-primary',
+            uploadingPrompt === nextPromptIndex,
           ]"
         >
           <svg
