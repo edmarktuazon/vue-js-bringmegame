@@ -35,41 +35,44 @@ const isCompleted = computed(() => {
     <!-- Upload -->
     <div v-if="nextPromptIndex !== null" class="space-y-4">
       <div class="bg-white rounded-lg shadow-sm p-12">
-        <h4 class="text-dark-gray mb-6 text-center text-md font-medium">
-          Bring me:
-          <span class="text-primary"
-            ><strong>{{ props.game?.prompts?.[nextPromptIndex] }}</strong></span
-          >
-        </h4>
+        <!-- Header -->
+        <div class="text-center mb-8">
+          <p class="text-sm text-gray-600 mb-2">Bring me:</p>
+          <h4 class="text-2xl font-bold text-primary">
+            {{ props.game?.prompts?.[nextPromptIndex] }}
+          </h4>
+        </div>
 
+        <!-- Upload box -->
         <label
           :class="[
-            'flex flex-col items-center justify-center gap-4 w-full px-6 py-8 border-2 border-dashed rounded-xl cursor-pointer transition h-56 bg-primary/20 text-white border-primary',
-            uploadingPrompt === nextPromptIndex,
+            'flex flex-col items-center justify-center gap-4 w-full px-6 py-12 border-2 border-dashed rounded-2xl cursor-pointer transition-all hover:scale-[1.02]',
+            uploadingPrompt === nextPromptIndex ? 'bg-gray-50' : 'bg-primary/10 border-primary',
           ]"
         >
+          <!-- Camera icon -->
           <svg
             v-if="uploadingPrompt !== nextPromptIndex"
-            class="w-16 h-16 text-slate"
+            class="w-20 h-20 text-primary"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
+            stroke-width="1.5"
           >
             <path
               stroke-linecap="round"
               stroke-linejoin="round"
-              stroke-width="2"
               d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"
             />
             <path
               stroke-linecap="round"
               stroke-linejoin="round"
-              stroke-width="2"
               d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"
             />
           </svg>
 
-          <svg v-else class="w-16 h-16 text-primary animate-spin" fill="none" viewBox="0 0 24 24">
+          <!-- Spinner -->
+          <svg v-else class="w-20 h-20 text-primary animate-spin" fill="none" viewBox="0 0 24 24">
             <circle
               class="opacity-25"
               cx="12"
@@ -85,10 +88,8 @@ const isCompleted = computed(() => {
             ></path>
           </svg>
 
-          <span
-            class="text-center text-base font-medium"
-            :class="uploadingPrompt === nextPromptIndex ? 'text-primary' : 'text-slate'"
-          >
+          <!-- Text -->
+          <span class="text-center text-2xl font-semibold text-primary">
             {{
               uploadingPrompt === nextPromptIndex
                 ? 'Processing your photo...'
