@@ -150,46 +150,49 @@ const updateUsersList = (subs) => {
 // LEADERBOARD
 // ===============================================
 const updateLeaderboard = () => {
+  if (!currentGame.value?.actualStartTime) {
+    // Kung wala pang actualStartTime (e.g. countdown pa lang), clear leaderboard
+    leaderboard.value = []
+    return
+  }
+
   if (allSubmissions.value.length === 0) {
     leaderboard.value = []
     return
   }
 
-  // First get the game actualStartTime once
-  if (!currentGame.value?.actualStartTime) {
-    console.warn('No actualStartTime on game, cannot calculate leaderboard')
-    leaderboard.value = []
-    return
-  }
   const gameStartTime = currentGame.value.actualStartTime.toMillis()
 
-  const userBestTimes = {}
+  const userCompletion = {}
+
   allSubmissions.value.forEach((sub) => {
     const { userId, instagramHandle, uploadedAt, promptIndex } = sub
     if (!userId || !uploadedAt) return
 
-    if (!userBestTimes[userId]) {
-      userBestTimes[userId] = { instagramHandle, times: [], prompts: new Set() }
+    if (!userCompletion[userId]) {
+      userCompletion[userId] = {
+        instagramHandle,
+        times: [],
+        prompts: new Set(),
+      }
     }
 
     const timeMs = uploadedAt.toMillis()
-    userBestTimes[userId].times.push(timeMs)
-    userBestTimes[userId].prompts.add(promptIndex)
+    userCompletion[userId].times.push(timeMs)
+    userCompletion[userId].prompts.add(promptIndex)
   })
 
   const entries = []
-  Object.entries(userBestTimes).forEach(([userId, info]) => {
+  Object.entries(userCompletion).forEach(([userId, info]) => {
     if (info.prompts.size === 3) {
-      // Completion = last upload time
-      const completedAt = Math.max(...info.times)
-      // Total time = from game start to completion
-      const total = completedAt - gameStartTime
+      const completedAt = Math.max(...info.times) // last upload
+      const totalTime = completedAt - gameStartTime
 
       entries.push({
         userId,
         instagramHandle: info.instagramHandle,
-        totalTime: total,
-        formattedTime: formatDetailedTime(total),
+        totalTime,
+        formattedTime: formatDetailedTime(totalTime),
       })
     }
   })
@@ -197,7 +200,10 @@ const updateLeaderboard = () => {
   leaderboard.value = entries
     .sort((a, b) => a.totalTime - b.totalTime)
     .slice(0, 10)
-    .map((e, i) => ({ ...e, rank: i + 1 }))
+    .map((entry, index) => ({
+      ...entry,
+      rank: index + 1,
+    }))
 }
 
 const formatDetailedTime = (ms) => {
@@ -211,9 +217,13 @@ const formatDetailedTime = (ms) => {
   return `${minPart}${secPart}${msPart}`.trim()
 }
 
-// Watch submissions for leaderboard update
-watch(allSubmissions, updateLeaderboard, { deep: true })
-
+watch(
+  [allSubmissions, () => currentGame.value?.actualStartTime],
+  () => {
+    updateLeaderboard()
+  },
+  { deep: true, immediate: true },
+)
 // ===============================================
 // LOGOUT
 // ===============================================
