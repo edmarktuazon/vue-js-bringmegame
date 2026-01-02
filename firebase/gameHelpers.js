@@ -25,8 +25,6 @@ export const submitPhoto = async (gameId, userId, instagramHandle, promptIndex, 
   try {
     if (!file) throw new Error('No file selected')
 
-    console.log('⚡ Starting upload for prompt', promptIndex)
-
     const options = {
       maxSizeMB: 0.3,
       maxWidthOrHeight: 800,
@@ -36,13 +34,10 @@ export const submitPhoto = async (gameId, userId, instagramHandle, promptIndex, 
     }
 
     const compressedFile = await imageCompression(file, options)
-    console.log('✅ Compressed:', (compressedFile.size / 1024).toFixed(0) + 'KB')
 
     const timestamp = Date.now()
     const filePath = `submissions/${gameId}/${userId}/${promptIndex}_${timestamp}.jpg`
     const imgRef = storageRef(storage, filePath)
-
-    console.log('📤 Uploading to:', filePath)
 
     await uploadBytes(imgRef, compressedFile, {
       contentType: 'image/jpeg',
@@ -50,7 +45,6 @@ export const submitPhoto = async (gameId, userId, instagramHandle, promptIndex, 
     })
 
     const photoUrl = await getDownloadURL(imgRef)
-    console.log('✅ Upload successful, URL:', photoUrl)
 
     const submissionId = `${userId}_${promptIndex}`
     const submissionDocRef = doc(db, 'games', gameId, 'submissions', submissionId)
@@ -68,9 +62,9 @@ export const submitPhoto = async (gameId, userId, instagramHandle, promptIndex, 
 
     try {
       await setDoc(submissionDocRef, submissionData, { merge: true })
-      console.log('✅ Firestore saved with ID:', submissionId)
+      console.log(' Firestore saved with ID:', submissionId)
     } catch (firestoreError) {
-      console.error('❌ Firestore error:', firestoreError)
+      console.error('Firestore error:', firestoreError)
     }
 
     return photoUrl
@@ -122,7 +116,7 @@ export const createGame = async (prompts, createdByEmail) => {
       isActive: true,
       createdBy: createdByEmail,
       createdAt: serverTimestamp(),
-      startedAt: null, // Will be set when status becomes 'active'
+      startedAt: null,
       prize: { description: '', logoUrl: '' },
     }
 
@@ -217,7 +211,6 @@ export const createUser = async (instagramHandle, currentGameId = null) => {
     }
 
     await setDoc(userRef, userData)
-    console.log('New user created:', userRef.id)
     return { id: userRef.id, ...userData }
   } catch (error) {
     console.error('Error creating/updating user:', error)
@@ -244,12 +237,9 @@ export const updateUserCurrentGame = async (userId, gameId) => {
 
 export const getUserSubmissions = async (gameId, userId) => {
   try {
-    console.log('📥 Getting submissions for:', { gameId, userId })
-
     const q = query(collection(db, 'games', gameId, 'submissions'), where('userId', '==', userId))
 
     const snapshot = await getDocs(q)
-    console.log('📊 Found', snapshot.size, 'submissions')
 
     const result = {}
 
@@ -363,51 +353,33 @@ export const updateSubmissionStatus = async (gameId, submissionId, status, admin
 }
 
 // ============================================
-// ✅ CENTRAL TIMER - LEADERBOARD & COMPLETION
+// CENTRAL TIMER - LEADERBOARD & COMPLETION
 // ============================================
 
 export const getUserCompletionTime = async (gameId, userId) => {
   try {
-    console.log('📊 Getting completion time for:', { gameId, userId })
-
-    // Get game to find startedAt
     const gameDoc = await getDoc(doc(db, 'games', gameId))
     if (!gameDoc.exists()) {
-      console.error('❌ Game not found:', gameId)
       return null
     }
 
     const gameData = gameDoc.data()
     const gameStartTime = gameData.startedAt?.toMillis() + 30000
 
-    console.log('🎮 Game data:', {
-      hasStartedAt: !!gameData.startedAt,
-      gameStartTime,
-      status: gameData.status,
-    })
-
     if (!gameData.startedAt) {
-      console.error('❌ Game has no startedAt set!')
-      console.log('⚠️ Game might not be active yet')
       return null
     }
 
-    // Get all user submissions
     const q = query(collection(db, 'games', gameId, 'submissions'), where('userId', '==', userId))
     const snapshot = await getDocs(q)
 
-    console.log('📤 User submissions found:', snapshot.size)
-
     if (snapshot.size !== 3) {
-      console.log('⚠️ User has not completed all 3 prompts yet')
       return null
     }
 
-    // Find latest upload time
     let lastUploadTime = 0
     snapshot.forEach((doc) => {
       const uploadTime = doc.data().uploadedAt?.toMillis()
-      console.log(`  Prompt ${doc.data().promptIndex}: ${uploadTime}`)
       if (uploadTime && uploadTime > lastUploadTime) {
         lastUploadTime = uploadTime
       }
@@ -418,15 +390,8 @@ export const getUserCompletionTime = async (gameId, userId) => {
       return null
     }
 
-    // ✅ Calculate from GAME START (after countdown) to completion
     let totalTime = lastUploadTime - gameStartTime
     if (totalTime < 0) totalTime = 0
-
-    console.log('⏱️ Completion calculated:', {
-      gameStartTime: new Date(gameStartTime).toISOString(),
-      lastUploadTime: new Date(lastUploadTime).toISOString(),
-      totalTime: formatDetailedTime(totalTime),
-    })
 
     return {
       totalTime,
@@ -486,13 +451,10 @@ export const getLeaderboard = async (gameId, onlyApproved = false) => {
     const leaderboard = []
 
     Object.entries(userSubmissions).forEach(([userId, info]) => {
-      // Must complete all 3 prompts
       if (info.promptIndices.size !== 3) return
 
-      // Find when they completed (last upload)
       const completedAt = Math.max(...info.times)
 
-      // ✅ Calculate from GAME START (after countdown) to completion
       let totalTime = completedAt - gameStartTime
       if (totalTime < 0) totalTime = 0
 

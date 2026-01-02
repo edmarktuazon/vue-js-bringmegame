@@ -4,9 +4,9 @@ import { auth } from '/firebase/config'
 import { useRouter } from 'vue-router'
 import { signOut } from 'firebase/auth'
 import { db } from '/firebase/config'
-import { doc, onSnapshot } from 'firebase/firestore'
+import { doc, onSnapshot, collection, query, where, orderBy } from 'firebase/firestore'
 
-import { getActiveGame, listenToSubmissions } from '/firebase/gameHelpers' // ← Change: listenToSubmissions only
+import { getActiveGame, listenToSubmissions } from '/firebase/gameHelpers'
 
 import BMGLogo from '/BMG-Logo.png'
 
@@ -28,11 +28,14 @@ const users = ref(['All Users'])
 const selectedUser = ref('All Users')
 const loadingGame = ref(false)
 
+const liveFeed = ref([])
+
 const showLogoutModal = ref(false)
 const isLoggingOut = ref(false)
 
 let unsubscribeSubs = null
 let unsubscribeGame = null
+let unsubscribeLiveFeed = null
 
 // ===============================================
 // LIFECYCLE
@@ -44,10 +47,11 @@ onMounted(() => {
 onUnmounted(() => {
   if (unsubscribeSubs) unsubscribeSubs()
   if (unsubscribeGame) unsubscribeGame()
+  if (unsubscribeLiveFeed) unsubscribeLiveFeed()
 })
 
 // ===============================================
-// LOAD ACTIVE GAME & SETUP REAL-TIME LISTENER
+// LOAD ACTIVE GAME & SETUP REAL-TIME LISTENERS
 // ===============================================
 const loadGameData = async () => {
   try {
@@ -58,11 +62,13 @@ const loadGameData = async () => {
 
     if (currentGame.value) {
       setupCurrentGameListener()
+      setupLiveFeedListener()
     } else {
       // No active game
       allSubmissions.value = []
       users.value = ['All Users']
       leaderboard.value = []
+      liveFeed.value = []
     }
   } catch (error) {
     console.error('Error loading game:', error)
@@ -93,12 +99,35 @@ const setupCurrentGameListener = () => {
   })
 }
 
-// Watch for game change (e.g., after creating new game)
+const setupLiveFeedListener = () => {
+  if (unsubscribeLiveFeed) unsubscribeLiveFeed()
+
+  if (!currentGame.value?.id) {
+    liveFeed.value = []
+    return
+  }
+
+  const q = query(
+    collection(db, 'users'),
+    where('currentGameId', '==', currentGame.value.id),
+    where('hasJoined', '==', true),
+    orderBy('joinedAt', 'desc'),
+  )
+
+  unsubscribeLiveFeed = onSnapshot(q, (snapshot) => {
+    liveFeed.value = snapshot.docs.map((doc) => ({
+      id: doc.id,
+      instagramHandle: doc.data().instagramHandle,
+    }))
+  })
+}
+
 watch(
   () => currentGame.value?.id,
   (newId, oldId) => {
     if (newId !== oldId) {
       setupCurrentGameListener()
+      setupLiveFeedListener()
     }
   },
 )
@@ -245,12 +274,38 @@ const confirmLogout = async () => {
         </div>
 
         <!-- Right column -->
-        <SubmissionsGallery
-          :current-game="currentGame"
-          :all-submissions="allSubmissions"
-          :users="users"
-          v-model:selected-user="selectedUser"
-        />
+        <div class="space-y-6">
+          <SubmissionsGallery
+            :current-game="currentGame"
+            :all-submissions="allSubmissions"
+            :users="users"
+            v-model:selected-user="selectedUser"
+          />
+
+          <!--Live feed -->
+          <div class="bg-white rounded-lg shadow-sm p-6">
+            <h3 class="text-lg font-semibold text-dark-gray mb-4">
+              Live Players ({{ liveFeed.length }})
+            </h3>
+            <div v-if="liveFeed.length === 0" class="text-center text-slate py-8">
+              No players have joined yet.
+            </div>
+            <div v-else class="space-y-3 max-h-96 overflow-y-auto">
+              <div
+                v-for="player in liveFeed"
+                :key="player.id"
+                class="flex items-center gap-3 py-2 px-3 bg-soft rounded-md"
+              >
+                <div
+                  class="w-10 h-10 bg-primary/20 rounded-full flex items-center justify-center text-primary font-bold"
+                >
+                  {{ player.instagramHandle.charAt(0).toUpperCase() }}
+                </div>
+                <span class="text-dark-gray font-medium">{{ player.instagramHandle }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </main>
 

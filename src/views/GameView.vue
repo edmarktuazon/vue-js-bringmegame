@@ -82,7 +82,6 @@ onMounted(async () => {
     setupLiveFeedListener()
 
     if (game.value.status === 'active') {
-      // ✅ Start countdown if within 30s of start
       const elapsedMs = Date.now() - (game.value.startedAt?.toMillis() || 0)
       if (elapsedMs < 30000) {
         startCountdown()
@@ -144,29 +143,16 @@ const startCountdown = () => {
 const checkCompletion = async () => {
   const submittedCount = Object.keys(submissions.value).length
 
-  console.log('🎯 Checking completion:', {
-    submittedCount,
-    needed: 3,
-    hasGameId: !!game.value?.id,
-    hasUserId: !!user.value?.id,
-  })
-
   if (submittedCount === 3 && game.value?.id && user.value?.id) {
     if (timerInterval.value) {
       clearInterval(timerInterval.value)
     }
 
-    console.log('✅ All prompts complete! Getting completion time...')
     const result = await getUserCompletionTime(game.value.id, user.value.id)
-
-    console.log('⏱️ Completion result:', result)
 
     if (result) {
       completionTime.value = result
       showCompletionModal.value = true
-      console.log('🎉 Completion modal shown!')
-    } else {
-      console.error('❌ No completion result returned')
     }
   }
 }
@@ -361,7 +347,8 @@ const handleLogout = () => {
         <div class="grid gap-6 lg:col-span-2">
           <div class="bg-white rounded-lg shadow-sm p-8 text-center">
             <h2 class="text-2xl font-bold text-dark-gray mb-2">
-              Welcome, {{ user?.instagramHandle }}!
+              Welcome, <span class="text-primary">{{ user?.instagramHandle }}</span
+              >!
             </h2>
             <div class="bg-primary/10 border-2 border-primary rounded-lg p-6 my-6">
               <div class="flex items-center justify-center gap-3 mb-3">
