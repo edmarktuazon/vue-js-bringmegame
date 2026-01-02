@@ -1,11 +1,10 @@
 <script setup>
 import { ref, onMounted, onUnmounted, watch } from 'vue'
-import { auth, db } from '/firebase/config'
+import { auth } from '/firebase/config'
 import { useRouter } from 'vue-router'
 import { signOut } from 'firebase/auth'
-import { collection, query, where, onSnapshot, orderBy } from 'firebase/firestore'
 
-import { getActiveGame, listenToSubmissions } from '/firebase/gameHelpers'
+import { getActiveGame, listenToSubmissions } from '/firebase/gameHelpers' // ← Change: listenToSubmissions only
 
 import BMGLogo from '/BMG-Logo.png'
 
@@ -14,7 +13,6 @@ import GameStatus from '../components/admin/GameStatus.vue'
 import Leaderboard from '../components/admin/Leaderboard.vue'
 import PrizeEditorForm from '../components/admin/PrizeEditorForm.vue'
 import SubmissionsGallery from '../components/admin/SubmissionsGallery.vue'
-import LiveFeed from '../components/game/LiveFeed.vue'
 
 const router = useRouter()
 
@@ -31,10 +29,7 @@ const loadingGame = ref(false)
 const showLogoutModal = ref(false)
 const isLoggingOut = ref(false)
 
-const liveFeed = ref([])
-
 let unsubscribeSubs = null
-let unsubscribeFeed = null
 
 // ===============================================
 // LIFECYCLE
@@ -45,7 +40,6 @@ onMounted(() => {
 
 onUnmounted(() => {
   if (unsubscribeSubs) unsubscribeSubs()
-  if (unsubscribeFeed) unsubscribeFeed()
 })
 
 // ===============================================
@@ -60,13 +54,11 @@ const loadGameData = async () => {
 
     if (currentGame.value) {
       setupCurrentGameListener()
-      setupLiveFeedListener()
     } else {
       // No active game
       allSubmissions.value = []
       users.value = ['All Users']
       leaderboard.value = []
-      liveFeed.value = []
     }
   } catch (error) {
     console.error('Error loading game:', error)
@@ -90,39 +82,12 @@ const setupCurrentGameListener = () => {
   })
 }
 
-// ===============================================
-// SETUP LIVE FEED LISTENER
-// ===============================================
-const setupLiveFeedListener = () => {
-  if (unsubscribeFeed) unsubscribeFeed()
-
-  if (!currentGame.value?.id) {
-    liveFeed.value = []
-    return
-  }
-
-  const q = query(
-    collection(db, 'users'),
-    where('currentGameId', '==', currentGame.value.id),
-    where('hasJoined', '==', true),
-    orderBy('joinedAt', 'desc'),
-  )
-
-  unsubscribeFeed = onSnapshot(q, (snapshot) => {
-    liveFeed.value = snapshot.docs.map((doc) => ({
-      id: doc.id,
-      instagramHandle: doc.data().instagramHandle,
-    }))
-  })
-}
-
 // Watch for game change (e.g., after creating new game)
 watch(
   () => currentGame.value?.id,
   (newId, oldId) => {
     if (newId !== oldId) {
       setupCurrentGameListener()
-      setupLiveFeedListener()
     }
   },
 )
@@ -263,16 +228,12 @@ const confirmLogout = async () => {
         </div>
 
         <!-- Right column -->
-        <div class="space-y-6">
-          <SubmissionsGallery
-            :current-game="currentGame"
-            :all-submissions="allSubmissions"
-            :users="users"
-            v-model:selected-user="selectedUser"
-          />
-
-          <LiveFeed :live-feed="liveFeed" />
-        </div>
+        <SubmissionsGallery
+          :current-game="currentGame"
+          :all-submissions="allSubmissions"
+          :users="users"
+          v-model:selected-user="selectedUser"
+        />
       </div>
     </main>
 

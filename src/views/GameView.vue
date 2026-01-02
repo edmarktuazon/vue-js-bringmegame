@@ -7,7 +7,6 @@ import {
   submitPhoto,
   getUserCompletionTime,
   createLocalPreview,
-  setActualGameStartTime, // ← NEW
 } from '/firebase/gameHelpers'
 import { db } from '/firebase/config'
 import {
@@ -83,13 +82,7 @@ onMounted(async () => {
     setupLiveFeedListener()
 
     if (game.value.status === 'active') {
-      // ✅ Check if actualStartTime is already set
-      if (!game.value.actualStartTime) {
-        // Game was just started, show countdown
-        startCountdown()
-      }
-      // If actualStartTime exists, game already started (late joiner)
-      // No countdown needed
+      startCountdown()
     }
 
     loading.value = false
@@ -115,34 +108,20 @@ watch(
   () => game.value?.status,
   (newStatus, oldStatus) => {
     if (oldStatus === 'waiting' && newStatus === 'active') {
-      // ✅ Only show countdown if actualStartTime not set yet
-      if (!game.value.actualStartTime) {
-        startCountdown()
-      }
+      startCountdown()
     }
   },
 )
 
-// ✅ NEW: Set actual start time after countdown
 const startCountdown = () => {
   showCountdown.value = true
   countdown.value = 30
 
-  countdownInterval.value = setInterval(async () => {
+  countdownInterval.value = setInterval(() => {
     countdown.value--
     if (countdown.value <= 0) {
       clearInterval(countdownInterval.value)
       showCountdown.value = false
-
-      // ✅ Set actualStartTime in Firestore when countdown finishes
-      if (game.value?.id) {
-        try {
-          await setActualGameStartTime(game.value.id)
-          console.log('✅ Game actual start time set!')
-        } catch (error) {
-          console.error('❌ Failed to set game start time:', error)
-        }
-      }
     }
   }, 1000)
 }
@@ -208,6 +187,7 @@ const handlePhotoSelect = (promptIndex, e) => {
 
   if (!file) return
 
+  // Validate file type
   const validTypes = [
     'image/jpeg',
     'image/jpg',
@@ -250,6 +230,8 @@ const handlePhotoUpload = async (promptIndex, file) => {
   uploadingPrompt.value = promptIndex
 
   try {
+    console.log('⚡ Starting fast upload for prompt', promptIndex)
+
     const url = await submitPhoto(
       game.value.id,
       user.value.id,
@@ -257,6 +239,8 @@ const handlePhotoUpload = async (promptIndex, file) => {
       promptIndex,
       file,
     )
+
+    console.log('✅ Upload complete! URL:', url)
 
     submissions.value[promptIndex] = {
       promptIndex,
@@ -272,12 +256,19 @@ const handlePhotoUpload = async (promptIndex, file) => {
 
     selectedPhotoFile.value = null
 
+    console.log('🔄 Refreshing all submissions from server...')
     const freshSubmissions = await getUserSubmissions(game.value.id, user.value.id)
     submissions.value = { ...freshSubmissions }
+    console.log('✅ Submissions refreshed:', Object.keys(submissions.value).length, 'total')
 
     await checkCompletion()
   } catch (error) {
-    console.error('❌ Upload failed:', error)
+    console.error('❌ Upload failed:', {
+      message: error.message,
+      code: error.code,
+      promptIndex,
+      error,
+    })
 
     delete submissions.value[promptIndex]
     if (localPreviews.value[promptIndex]) {
@@ -299,6 +290,7 @@ const handlePhotoUpload = async (promptIndex, file) => {
       errorMessage += error.message || 'Unknown error. Please try again.'
     }
 
+    console.error('🚨 Showing error to user:', errorMessage)
     alert(errorMessage)
     selectedPhotoFile.value = null
   } finally {
@@ -414,7 +406,7 @@ const handleLogout = () => {
           </div>
         </div>
 
-        <div class="lg:col-span-1">
+        <div class="lg:col-span-1" v-if="game?.status === 'waiting' || game?.status === 'starting'">
           <LiveFeed :live-feed="liveFeed" />
         </div>
       </div>
