@@ -3,7 +3,7 @@ import { ref, onMounted, onUnmounted, watch } from 'vue'
 import { auth, db } from '/firebase/config'
 import { useRouter } from 'vue-router'
 import { signOut } from 'firebase/auth'
-import { collection, query, where, onSnapshot, orderBy } from 'firebase/firestore'
+import { collection, query, where, onSnapshot, orderBy, doc } from 'firebase/firestore'
 
 import { getActiveGame, listenToSubmissions } from '/firebase/gameHelpers'
 
@@ -24,6 +24,7 @@ const router = useRouter()
 const currentGame = ref(null)
 const allSubmissions = ref([])
 const leaderboard = ref([])
+const liveFeed = ref([])
 const users = ref(['All Users'])
 const selectedUser = ref('All Users')
 const loadingGame = ref(false)
@@ -31,8 +32,7 @@ const loadingGame = ref(false)
 const showLogoutModal = ref(false)
 const isLoggingOut = ref(false)
 
-const liveFeed = ref([])
-
+let unsubscribeGame = null
 let unsubscribeSubs = null
 let unsubscribeFeed = null
 
@@ -54,25 +54,58 @@ onUnmounted(() => {
 const loadGameData = async () => {
   try {
     loadingGame.value = true
-    currentGame.value = await getActiveGame()
 
-    selectedUser.value = 'All Users'
+    // First, get the active game once to get its ID
+    const initialGame = await getActiveGame()
 
-    if (currentGame.value) {
-      setupCurrentGameListener()
-      setupLiveFeedListener()
-    } else {
-      // No active game
+    if (!initialGame) {
+      currentGame.value = null
       allSubmissions.value = []
-      users.value = ['All Users']
       leaderboard.value = []
       liveFeed.value = []
+      loadingGame.value = false
+      return
     }
+
+    // Set initial value
+    currentGame.value = initialGame
+
+    // Now setup REAL-TIME listener for the game document
+    setupGameDocumentListener(initialGame.id)
+
+    // Setup other listeners
+    setupCurrentGameListener() // this is your submissions listener
+    setupLiveFeedListener()
+
+    loadingGame.value = false
   } catch (error) {
-    console.error('Error loading game:', error)
-  } finally {
+    console.error('Error loading game data:', error)
     loadingGame.value = false
   }
+}
+
+const setupGameDocumentListener = (gameId) => {
+  if (unsubscribeGame) unsubscribeGame()
+
+  const gameRef = doc(db, 'games', gameId)
+
+  unsubscribeGame = onSnapshot(
+    gameRef,
+    (docSnap) => {
+      if (docSnap.exists()) {
+        currentGame.value = { id: docSnap.id, ...docSnap.data() }
+        console.log(
+          '✅ Game document updated in real-time:',
+          currentGame.value.actualStartTime ? 'Start time set!' : 'Waiting for start...',
+        )
+      } else {
+        currentGame.value = null
+      }
+    },
+    (error) => {
+      console.error('Error listening to game document:', error)
+    },
+  )
 }
 
 const setupCurrentGameListener = () => {
@@ -151,7 +184,6 @@ const updateUsersList = (subs) => {
 // ===============================================
 const updateLeaderboard = () => {
   if (!currentGame.value?.actualStartTime) {
-    // Kung wala pang actualStartTime (e.g. countdown pa lang), clear leaderboard
     leaderboard.value = []
     return
   }
@@ -185,7 +217,7 @@ const updateLeaderboard = () => {
   const entries = []
   Object.entries(userCompletion).forEach(([userId, info]) => {
     if (info.prompts.size === 3) {
-      const completedAt = Math.max(...info.times) // last upload
+      const completedAt = Math.max(...info.times)
       const totalTime = completedAt - gameStartTime
 
       entries.push({
@@ -224,6 +256,7 @@ watch(
   },
   { deep: true, immediate: true },
 )
+
 // ===============================================
 // LOGOUT
 // ===============================================
