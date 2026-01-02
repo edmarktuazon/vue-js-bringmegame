@@ -83,13 +83,9 @@ onMounted(async () => {
     setupLiveFeedListener()
 
     if (game.value.status === 'active') {
-      // ✅ Check if actualStartTime is already set
       if (!game.value.actualStartTime) {
-        // Game was just started, show countdown
         startCountdown()
       }
-      // If actualStartTime exists, game already started (late joiner)
-      // No countdown needed
     }
 
     loading.value = false
@@ -123,7 +119,6 @@ watch(
   },
 )
 
-// ✅ NEW: Set actual start time after countdown
 const startCountdown = () => {
   showCountdown.value = true
   countdown.value = 30
@@ -134,7 +129,6 @@ const startCountdown = () => {
       clearInterval(countdownInterval.value)
       showCountdown.value = false
 
-      // ✅ Set actualStartTime in Firestore when countdown finishes
       if (game.value?.id) {
         try {
           await setActualGameStartTime(game.value.id)

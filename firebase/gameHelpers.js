@@ -122,8 +122,8 @@ export const createGame = async (prompts, createdByEmail) => {
       isActive: true,
       createdBy: createdByEmail,
       createdAt: serverTimestamp(),
-      startedAt: null, // Will be set when status becomes 'active'
-      actualStartTime: null, // ← NEW: Game start time (after countdown)
+      startedAt: null,
+      actualStartTime: null,
       prize: { description: '', logoUrl: '' },
     }
 
@@ -155,11 +155,9 @@ export const updateGameStatus = async (gameId, newStatus) => {
       throw new Error('Cannot start game without 3 prompts! Use "Create and Start Game" button.')
     }
 
-    // ✅ NEW: Set actualStartTime when game becomes active
     await updateDoc(gameRef, {
       status: newStatus,
       startedAt: serverTimestamp(),
-      // actualStartTime will be set 30 seconds later (after countdown)
     })
   } else {
     await updateDoc(gameRef, { status: newStatus })

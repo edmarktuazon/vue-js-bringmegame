@@ -155,6 +155,14 @@ const updateLeaderboard = () => {
     return
   }
 
+  // First get the game actualStartTime once
+  if (!currentGame.value?.actualStartTime) {
+    console.warn('No actualStartTime on game, cannot calculate leaderboard')
+    leaderboard.value = []
+    return
+  }
+  const gameStartTime = currentGame.value.actualStartTime.toMillis()
+
   const userBestTimes = {}
   allSubmissions.value.forEach((sub) => {
     const { userId, instagramHandle, uploadedAt, promptIndex } = sub
@@ -172,9 +180,11 @@ const updateLeaderboard = () => {
   const entries = []
   Object.entries(userBestTimes).forEach(([userId, info]) => {
     if (info.prompts.size === 3) {
-      const start = Math.min(...info.times)
-      const end = Math.max(...info.times)
-      const total = end - start
+      // Completion = last upload time
+      const completedAt = Math.max(...info.times)
+      // Total time = from game start to completion
+      const total = completedAt - gameStartTime
+
       entries.push({
         userId,
         instagramHandle: info.instagramHandle,
