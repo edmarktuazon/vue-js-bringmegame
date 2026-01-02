@@ -3,6 +3,8 @@ import { ref, onMounted, onUnmounted, watch } from 'vue'
 import { auth } from '/firebase/config'
 import { useRouter } from 'vue-router'
 import { signOut } from 'firebase/auth'
+import { db } from '/firebase/config'
+import { doc, onSnapshot } from 'firebase/firestore'
 
 import { getActiveGame, listenToSubmissions } from '/firebase/gameHelpers' // ← Change: listenToSubmissions only
 
@@ -30,6 +32,7 @@ const showLogoutModal = ref(false)
 const isLoggingOut = ref(false)
 
 let unsubscribeSubs = null
+let unsubscribeGame = null
 
 // ===============================================
 // LIFECYCLE
@@ -40,6 +43,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   if (unsubscribeSubs) unsubscribeSubs()
+  if (unsubscribeGame) unsubscribeGame()
 })
 
 // ===============================================
@@ -79,6 +83,13 @@ const setupCurrentGameListener = () => {
     allSubmissions.value = subs
     updateLeaderboard()
     updateUsersList(subs)
+  })
+
+  if (unsubscribeGame) unsubscribeGame()
+  unsubscribeGame = onSnapshot(doc(db, 'games', currentGame.value.id), (snap) => {
+    if (snap.exists()) {
+      currentGame.value = { id: snap.id, ...snap.data() }
+    }
   })
 }
 
@@ -120,6 +131,12 @@ const updateLeaderboard = () => {
     return
   }
 
+  const gameStartTime = currentGame.value?.startedAt?.toMillis() + 30000
+  if (!currentGame.value?.startedAt) {
+    leaderboard.value = []
+    return
+  }
+
   const userBestTimes = {}
   allSubmissions.value.forEach((sub) => {
     const { userId, instagramHandle, uploadedAt, promptIndex } = sub
@@ -137,14 +154,14 @@ const updateLeaderboard = () => {
   const entries = []
   Object.entries(userBestTimes).forEach(([userId, info]) => {
     if (info.prompts.size === 3) {
-      const start = Math.min(...info.times)
-      const end = Math.max(...info.times)
-      const total = end - start
+      const completedAt = Math.max(...info.times)
+      let totalTime = completedAt - gameStartTime
+      if (totalTime < 0) totalTime = 0
       entries.push({
         userId,
         instagramHandle: info.instagramHandle,
-        totalTime: total,
-        formattedTime: formatDetailedTime(total),
+        totalTime: totalTime,
+        formattedTime: formatDetailedTime(totalTime),
       })
     }
   })

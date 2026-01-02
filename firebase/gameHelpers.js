@@ -123,7 +123,6 @@ export const createGame = async (prompts, createdByEmail) => {
       createdBy: createdByEmail,
       createdAt: serverTimestamp(),
       startedAt: null, // Will be set when status becomes 'active'
-      actualStartTime: null, // ← NEW: Game start time (after countdown)
       prize: { description: '', logoUrl: '' },
     }
 
@@ -155,24 +154,13 @@ export const updateGameStatus = async (gameId, newStatus) => {
       throw new Error('Cannot start game without 3 prompts! Use "Create and Start Game" button.')
     }
 
-    // ✅ NEW: Set actualStartTime when game becomes active
     await updateDoc(gameRef, {
       status: newStatus,
       startedAt: serverTimestamp(),
-      // actualStartTime will be set 30 seconds later (after countdown)
     })
   } else {
     await updateDoc(gameRef, { status: newStatus })
   }
-}
-
-// ✅ NEW: Set actual start time after countdown
-export const setActualGameStartTime = async (gameId) => {
-  const gameRef = doc(db, 'games', gameId)
-  await updateDoc(gameRef, {
-    actualStartTime: serverTimestamp(),
-  })
-  console.log('✅ Actual game start time recorded')
 }
 
 export const updatePrize = async (gameId, description, logoFile) => {
@@ -380,18 +368,27 @@ export const updateSubmissionStatus = async (gameId, submissionId, status, admin
 
 export const getUserCompletionTime = async (gameId, userId) => {
   try {
-    // Get game to find actualStartTime
+    console.log('📊 Getting completion time for:', { gameId, userId })
+
+    // Get game to find startedAt
     const gameDoc = await getDoc(doc(db, 'games', gameId))
     if (!gameDoc.exists()) {
-      console.error('Game not found')
+      console.error('❌ Game not found:', gameId)
       return null
     }
 
     const gameData = gameDoc.data()
-    const gameStartTime = gameData.actualStartTime?.toMillis()
+    const gameStartTime = gameData.startedAt?.toMillis() + 30000
 
-    if (!gameStartTime) {
-      console.error('Game has no actualStartTime set!')
+    console.log('🎮 Game data:', {
+      hasStartedAt: !!gameData.startedAt,
+      gameStartTime,
+      status: gameData.status,
+    })
+
+    if (!gameData.startedAt) {
+      console.error('❌ Game has no startedAt set!')
+      console.log('⚠️ Game might not be active yet')
       return null
     }
 
@@ -399,21 +396,37 @@ export const getUserCompletionTime = async (gameId, userId) => {
     const q = query(collection(db, 'games', gameId, 'submissions'), where('userId', '==', userId))
     const snapshot = await getDocs(q)
 
-    if (snapshot.size !== 3) return null
+    console.log('📤 User submissions found:', snapshot.size)
+
+    if (snapshot.size !== 3) {
+      console.log('⚠️ User has not completed all 3 prompts yet')
+      return null
+    }
 
     // Find latest upload time
     let lastUploadTime = 0
     snapshot.forEach((doc) => {
       const uploadTime = doc.data().uploadedAt?.toMillis()
+      console.log(`  Prompt ${doc.data().promptIndex}: ${uploadTime}`)
       if (uploadTime && uploadTime > lastUploadTime) {
         lastUploadTime = uploadTime
       }
     })
 
-    if (!lastUploadTime) return null
+    if (!lastUploadTime) {
+      console.error('❌ No valid upload times found')
+      return null
+    }
 
-    // ✅ Calculate from GAME START to completion
-    const totalTime = lastUploadTime - gameStartTime
+    // ✅ Calculate from GAME START (after countdown) to completion
+    let totalTime = lastUploadTime - gameStartTime
+    if (totalTime < 0) totalTime = 0
+
+    console.log('⏱️ Completion calculated:', {
+      gameStartTime: new Date(gameStartTime).toISOString(),
+      lastUploadTime: new Date(lastUploadTime).toISOString(),
+      totalTime: formatDetailedTime(totalTime),
+    })
 
     return {
       totalTime,
@@ -422,7 +435,7 @@ export const getUserCompletionTime = async (gameId, userId) => {
       completedAt: lastUploadTime,
     }
   } catch (error) {
-    console.error('Error getting user completion time:', error)
+    console.error('❌ Error getting user completion time:', error)
     return null
   }
 }
@@ -434,10 +447,10 @@ export const getLeaderboard = async (gameId, onlyApproved = false) => {
     if (!gameDoc.exists()) return []
 
     const gameData = gameDoc.data()
-    const gameStartTime = gameData.actualStartTime?.toMillis()
+    const gameStartTime = gameData.startedAt?.toMillis() + 30000
 
-    if (!gameStartTime) {
-      console.warn('⚠️ Game has no actualStartTime, cannot calculate leaderboard properly')
+    if (!gameData.startedAt) {
+      console.warn('⚠️ Game has no startedAt, cannot calculate leaderboard properly')
       return []
     }
 
@@ -479,8 +492,9 @@ export const getLeaderboard = async (gameId, onlyApproved = false) => {
       // Find when they completed (last upload)
       const completedAt = Math.max(...info.times)
 
-      // ✅ Calculate from GAME START to completion
-      const totalTime = completedAt - gameStartTime
+      // ✅ Calculate from GAME START (after countdown) to completion
+      let totalTime = completedAt - gameStartTime
+      if (totalTime < 0) totalTime = 0
 
       leaderboard.push({
         userId,

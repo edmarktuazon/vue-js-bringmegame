@@ -82,7 +82,11 @@ onMounted(async () => {
     setupLiveFeedListener()
 
     if (game.value.status === 'active') {
-      startCountdown()
+      // ✅ Start countdown if within 30s of start
+      const elapsedMs = Date.now() - (game.value.startedAt?.toMillis() || 0)
+      if (elapsedMs < 30000) {
+        startCountdown()
+      }
     }
 
     loading.value = false
@@ -114,8 +118,19 @@ watch(
 )
 
 const startCountdown = () => {
+  if (!game.value?.startedAt) return
+
+  const startedAtMs = game.value.startedAt.toMillis()
+  const elapsedMs = Date.now() - startedAtMs
+  let remainingMs = 30000 - elapsedMs
+
+  if (remainingMs <= 0) {
+    showCountdown.value = false
+    return
+  }
+
   showCountdown.value = true
-  countdown.value = 30
+  countdown.value = Math.ceil(remainingMs / 1000)
 
   countdownInterval.value = setInterval(() => {
     countdown.value--
@@ -129,16 +144,29 @@ const startCountdown = () => {
 const checkCompletion = async () => {
   const submittedCount = Object.keys(submissions.value).length
 
+  console.log('🎯 Checking completion:', {
+    submittedCount,
+    needed: 3,
+    hasGameId: !!game.value?.id,
+    hasUserId: !!user.value?.id,
+  })
+
   if (submittedCount === 3 && game.value?.id && user.value?.id) {
     if (timerInterval.value) {
       clearInterval(timerInterval.value)
     }
 
+    console.log('✅ All prompts complete! Getting completion time...')
     const result = await getUserCompletionTime(game.value.id, user.value.id)
+
+    console.log('⏱️ Completion result:', result)
 
     if (result) {
       completionTime.value = result
       showCompletionModal.value = true
+      console.log('🎉 Completion modal shown!')
+    } else {
+      console.error('❌ No completion result returned')
     }
   }
 }
@@ -187,7 +215,6 @@ const handlePhotoSelect = (promptIndex, e) => {
 
   if (!file) return
 
-  // Validate file type
   const validTypes = [
     'image/jpeg',
     'image/jpg',
@@ -230,8 +257,6 @@ const handlePhotoUpload = async (promptIndex, file) => {
   uploadingPrompt.value = promptIndex
 
   try {
-    console.log('⚡ Starting fast upload for prompt', promptIndex)
-
     const url = await submitPhoto(
       game.value.id,
       user.value.id,
@@ -239,8 +264,6 @@ const handlePhotoUpload = async (promptIndex, file) => {
       promptIndex,
       file,
     )
-
-    console.log('✅ Upload complete! URL:', url)
 
     submissions.value[promptIndex] = {
       promptIndex,
@@ -256,19 +279,12 @@ const handlePhotoUpload = async (promptIndex, file) => {
 
     selectedPhotoFile.value = null
 
-    console.log('🔄 Refreshing all submissions from server...')
     const freshSubmissions = await getUserSubmissions(game.value.id, user.value.id)
     submissions.value = { ...freshSubmissions }
-    console.log('✅ Submissions refreshed:', Object.keys(submissions.value).length, 'total')
 
     await checkCompletion()
   } catch (error) {
-    console.error('❌ Upload failed:', {
-      message: error.message,
-      code: error.code,
-      promptIndex,
-      error,
-    })
+    console.error('❌ Upload failed:', error)
 
     delete submissions.value[promptIndex]
     if (localPreviews.value[promptIndex]) {
@@ -290,7 +306,6 @@ const handlePhotoUpload = async (promptIndex, file) => {
       errorMessage += error.message || 'Unknown error. Please try again.'
     }
 
-    console.error('🚨 Showing error to user:', errorMessage)
     alert(errorMessage)
     selectedPhotoFile.value = null
   } finally {
@@ -406,7 +421,7 @@ const handleLogout = () => {
           </div>
         </div>
 
-        <div class="lg:col-span-1" v-if="game?.status === 'waiting' || game?.status === 'starting'">
+        <div class="lg:col-span-1">
           <LiveFeed :live-feed="liveFeed" />
         </div>
       </div>
