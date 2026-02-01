@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import HomeFormView from '../views/HomeFormView.vue'
+import LeaderboardView from '../views/LeaderboardView.vue'
 import { auth } from '/firebase/config'
 
 const router = createRouter({
@@ -9,6 +10,12 @@ const router = createRouter({
       path: '/',
       name: 'home',
       component: HomeFormView,
+    },
+    {
+      path: '/leaderboard',
+      name: 'leaderboard',
+      component: LeaderboardView,
+      meta: { requiresUser: true },
     },
     {
       path: '/game',

@@ -46,15 +46,25 @@ const modelValue = defineModel()
         </div>
 
         <p class="text-sm text-slate mb-6">
-          Your submission is now under review. Winners will be contacted via Instagram.
+          <strong>Note:</strong> Your submission is now under review. Winners will be contacted via
+          Instagram. You may now proceed to the leaderboard to see how you rank against other
+          players or else exit the game.
         </p>
-        <button
-          @click="emit('exit')"
-          :disabled="isLoggingOut"
-          class="px-4 py-2 text-sm font-medium text-white rounded-md bg-primary disabled:opacity-50 cursor-pointer"
-        >
-          {{ isLoggingOut ? 'Exiting game...' : 'Exit Game' }}
-        </button>
+        <div class="flex flex-col gap-3">
+          <router-link
+            to="/leaderboard"
+            class="px-4 py-2 text-sm font-medium text-white rounded-md bg-primary disabled:opacity-50 cursor-pointer"
+            >Go to Leaderboard</router-link
+          >
+          <span class="text-slate text-sm">or</span>
+          <button
+            @click="emit('exit')"
+            :disabled="isLoggingOut"
+            class="text-sm text-primary underline hover:text-primary/80"
+          >
+            {{ isLoggingOut ? 'Exiting game...' : 'Exit Game' }}
+          </button>
+        </div>
       </div>
     </div>
   </Transition>
