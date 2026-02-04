@@ -43,6 +43,7 @@ const loadData = async () => {
 
   const snap = await getDocs(collection(db, 'games', game.value.id, 'submissions'))
   const userMap = new Map()
+  const startMs = game.value.startTime?.toMillis ? game.value.startTime.toMillis() : 0
 
   snap.forEach((d) => {
     const data = d.data()
@@ -52,6 +53,7 @@ const loadData = async () => {
       userMap.set(data.userId, {
         handle: data.instagramHandle || 'unknown',
         approvedCount: 0,
+        lastTime: 0,
         statuses: [null, null, null],
         count: 0,
       })
@@ -61,7 +63,11 @@ const loadData = async () => {
     u.count++
     u.statuses[data.promptIndex] = data.status
 
-    if (data.status === 'approved' && data.uploadedAt) {
+    if (data.uploadedAt?.toMillis() > u.lastTime) {
+      u.lastTime = data.uploadedAt.toMillis()
+    }
+
+    if (data.status === 'approved') {
       u.approvedCount++
     }
   })
@@ -70,10 +76,26 @@ const loadData = async () => {
   userMap.forEach((u, id) => {
     if (u.count !== 3) return
 
+    const completionMs = u.lastTime
+
+    if (!completionMs || completionMs <= startMs) {
+      list.push({
+        id,
+        handle: u.handle,
+        approvedCount: u.approvedCount || 0,
+        timeStr: '—',
+        statuses: u.statuses,
+      })
+      return
+    }
+
+    const timeMs = completionMs - startMs
     list.push({
       id,
       handle: u.handle,
-      approvedCount: u.approvedCount,
+      approvedCount: u.approvedCount || 0,
+      timeMs,
+      timeStr: formatDetailedTime(timeMs),
       statuses: u.statuses,
     })
   })
@@ -86,6 +108,7 @@ const loadData = async () => {
     if (a.timeMs !== b.timeMs) {
       return a.timeMs - b.timeMs
     }
+
     return a.handle.localeCompare(b.handle)
   })
 
@@ -136,7 +159,6 @@ const playerStatus = computed(() => {
     }
   }
 
-  // Wait for data to load
   if (rankedPlayers.value.length === 0) {
     return {
       message: 'Loading...',
@@ -192,6 +214,16 @@ const rankBg = (r) => {
   if (r === 5)
     return 'flex items-center justify-between rounded-lg transition-all border bg-purple-50 border-purple-400 shadow-xl'
   return 'flex items-center justify-between rounded-lg transition-all border bg-blue-50 border-blue-400 shadow-xl'
+}
+
+// Format milliseconds to mm:ss.SSS
+function formatDetailedTime(ms) {
+  if (typeof ms !== 'number' || ms < 0) return '—'
+  const totalSeconds = Math.floor(ms / 1000)
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+  const milliseconds = ms % 1000
+  return `${minutes}m ${seconds.toString().padStart(2, '0')}s ${milliseconds.toString().padStart(3, '0')}ms`
 }
 </script>
 
@@ -249,13 +281,12 @@ const rankBg = (r) => {
       <div v-else class="space-y-4">
         <div v-for="entry in topFive" :key="entry.id" class="grid grid-cols-2 gap-4">
           <div class="flex items-center p-3 md:p-4 rounded-md" :class="rankBg(entry.rank)">
-            <div
-              class="w-8 h-8 md:w-14 md:h-14 rounded-full flex items-center justify-center text-white font-bold text-sm md:text-2xl mr-2 shadow-md"
+            <h6
+              class="w-8 h-8 md:w-14 md:h-14 rounded-full flex items-center justify-center text-white font-bold text-sm md:text-xl mr-2 shadow-md"
               :class="rankBadge(entry.rank)"
             >
-              {{ entry.rank
-              }}<sup class="text-sm">{{ ['st', 'nd', 'rd'][entry.rank - 1] || 'th' }}</sup>
-            </div>
+              {{ entry.rank }}<sup>{{ ['st', 'nd', 'rd'][entry.rank - 1] || 'th' }}</sup>
+            </h6>
             <div class="flex-1">
               <div class="font-semibold text-sm md:text-xl text-dark-gray font-montserrat">
                 {{ entry.handle }}
@@ -268,9 +299,7 @@ const rankBg = (r) => {
                 class="w-full h-auto rounded-md flex items-center justify-center text-white font-bold text-xs md:text-sm shadow-md"
                 :class="statusBg(entry.statuses[i])"
               >
-                <span v-if="entry.statuses[i] === 'approved'">Approved</span>
-                <span v-else-if="entry.statuses[i] === 'rejected'">Rejected</span>
-                <span v-else>Pending</span>
+                <!-- No text inside squares anymore -->
               </div>
             </div>
           </div>
