@@ -1,6 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import HomeFormView from '../views/HomeFormView.vue'
-import LeaderboardView from '../views/LeaderboardView.vue'
 import { auth } from '/firebase/config'
 
 const router = createRouter({
@@ -10,24 +9,25 @@ const router = createRouter({
       path: '/',
       name: 'home',
       component: HomeFormView,
+      meta: { title: 'Home' },
     },
     {
       path: '/leaderboard',
       name: 'leaderboard',
-      component: LeaderboardView,
-      meta: { requiresUser: true },
+      component: () => import('../views/LiveLeaderboardView.vue'),
+      meta: { requiresUser: true, title: 'Leaderboard' },
     },
     {
       path: '/game',
       name: 'game',
       component: () => import('../views/GameView.vue'),
-      meta: { requiresUser: true },
+      meta: { requiresUser: true, title: 'Game' },
     },
     {
       path: '/admin',
       name: 'admin',
       component: () => import('../views/AdminView.vue'),
-      meta: { requiresAuth: true },
+      meta: { requiresAuth: true, title: 'Admin Dashboard' },
     },
 
     {
@@ -70,6 +70,11 @@ router.beforeEach(async (to, from, next) => {
   }
 
   next()
+})
+
+// Update document title after each route change
+router.afterEach((to) => {
+  document.title = to.meta.title || 'Default Title'
 })
 
 export default router

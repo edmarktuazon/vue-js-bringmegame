@@ -111,7 +111,7 @@ const handleSubmit = async (e) => {
           <button
             type="submit"
             :disabled="loading"
-            class="w-full bg-primary text-white font-semibold py-3 rounded-md transition-all duration-200 hover:bg-primary/90 focus:outline focus:outline-2 focus:outline-primary disabled:opacity-50 disabled:cursor-not-allowed"
+            class="w-full bg-primary text-white font-semibold py-3 rounded-md transition-all duration-200 hover:bg-primary/90 focus:outline focus:outline-2 focus:outline-primary disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
           >
             <span v-if="loading">Joining...</span>
             <span v-else>Join Game</span>

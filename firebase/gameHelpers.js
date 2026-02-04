@@ -25,6 +25,10 @@ export const submitPhoto = async (gameId, userId, instagramHandle, promptIndex, 
   try {
     if (!file) throw new Error('No file selected')
 
+    // 1. INSTANT preview URL (synchronous, no delay)
+    const previewUrl = URL.createObjectURL(file)
+
+    // 2. Compress image (this happens in background, preview already shown)
     const options = {
       maxSizeMB: 0.3,
       maxWidthOrHeight: 800,
@@ -35,6 +39,7 @@ export const submitPhoto = async (gameId, userId, instagramHandle, promptIndex, 
 
     const compressedFile = await imageCompression(file, options)
 
+    // 3. Upload compressed file
     const timestamp = Date.now()
     const filePath = `submissions/${gameId}/${userId}/${promptIndex}_${timestamp}.jpg`
     const imgRef = storageRef(storage, filePath)
@@ -46,6 +51,7 @@ export const submitPhoto = async (gameId, userId, instagramHandle, promptIndex, 
 
     const photoUrl = await getDownloadURL(imgRef)
 
+    // 4. Save to Firestore
     const submissionId = `${userId}_${promptIndex}`
     const submissionDocRef = doc(db, 'games', gameId, 'submissions', submissionId)
 
@@ -60,22 +66,16 @@ export const submitPhoto = async (gameId, userId, instagramHandle, promptIndex, 
       uploadedAt: serverTimestamp(),
     }
 
-    try {
-      await setDoc(submissionDocRef, submissionData, { merge: true })
-      console.log(' Firestore saved with ID:', submissionId)
-    } catch (firestoreError) {
-      console.error('Firestore error:', firestoreError)
-    }
+    await setDoc(submissionDocRef, submissionData, { merge: true })
 
-    return photoUrl
+    // Clean up preview URL after success (but preview already shown)
+    setTimeout(() => URL.revokeObjectURL(previewUrl), 2000)
+
+    return { photoUrl, previewUrl } // return both for flexibility
   } catch (error) {
     console.error('❌ Upload failed:', error)
     throw error
   }
-}
-
-export const createLocalPreview = (file) => {
-  return URL.createObjectURL(file)
 }
 
 export const getActiveGame = async () => {
@@ -491,4 +491,95 @@ export const formatDetailedTime = (ms) => {
   const msPart = `${millis.toString().padStart(3, '0')}ms`
 
   return `${minPart}${secPart}${msPart}`.trim()
+}
+
+// ============================================
+// LIVE LEADERBOARD
+// ============================================
+
+export const getLiveLeaderboard = async (gameId) => {
+  try {
+    const gameDoc = await getDoc(doc(db, 'games', gameId))
+    if (!gameDoc.exists()) return []
+
+    const gameData = gameDoc.data()
+    const startTimeMs =
+      gameData.actualStartTime?.toMillis() || gameData.startedAt?.toMillis() + 30000
+    if (!startTimeMs) return []
+
+    const subsSnap = await getDocs(collection(db, 'games', gameId, 'submissions'))
+
+    const userMap = new Map()
+
+    subsSnap.forEach((docSnap) => {
+      const d = docSnap.data()
+      if (!d.userId || d.promptIndex == null) return
+
+      if (!userMap.has(d.userId)) {
+        userMap.set(d.userId, {
+          instagramHandle: d.instagramHandle || 'unknown',
+          lastUploadTime: 0,
+          statusMap: { 0: null, 1: null, 2: null },
+          submissionCount: 0,
+        })
+      }
+
+      const entry = userMap.get(d.userId)
+      entry.submissionCount++
+      entry.statusMap[d.promptIndex] = d.status
+      if (d.uploadedAt?.toMillis() > entry.lastUploadTime) {
+        entry.lastUploadTime = d.uploadedAt.toMillis()
+      }
+    })
+
+    const entries = []
+
+    userMap.forEach((info, userId) => {
+      if (info.submissionCount !== 3) return
+
+      const completionMs = info.lastUploadTime
+      const totalMs = completionMs - startTimeMs
+      if (totalMs < 0) return
+
+      entries.push({
+        userId,
+        instagramHandle: info.instagramHandle,
+        totalMs,
+        formattedTime: formatDetailedTime(totalMs),
+        statusMap: info.statusMap,
+        completionTimestamp: completionMs,
+      })
+    })
+
+    entries.sort((a, b) => a.totalMs - b.totalMs)
+
+    return entries.map((e, i) => ({
+      ...e,
+      rank: i + 1,
+    }))
+  } catch (err) {
+    console.error('Leaderboard error:', err)
+    return []
+  }
+}
+
+export const getPlayerPositionAndDiff = async (gameId, userId) => {
+  const leaderboard = await getLiveLeaderboard(gameId)
+  if (!leaderboard.length) return { isInTop5: false, diffFormatted: 'Not ranked yet' }
+
+  const player = leaderboard.find((e) => e.userId === userId)
+  if (!player) return { isInTop5: false, diffFormatted: 'Not ranked yet' }
+
+  if (player.rank <= 5) {
+    return { isInTop5: true, rank: player.rank, diffFormatted: 'IN THE TOP 5' }
+  }
+
+  const fifth = leaderboard[4]
+  const diffMs = player.totalMs - fifth.totalMs
+  const sign = diffMs >= 0 ? '+' : '-'
+  return {
+    isInTop5: false,
+    rank: player.rank,
+    diffFormatted: `${sign}${formatDetailedTime(Math.abs(diffMs))}`,
+  }
 }
