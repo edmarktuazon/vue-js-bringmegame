@@ -33,7 +33,9 @@ defineProps({
             {{ feedUser.instagramHandle.charAt(1).toUpperCase() }}
           </span>
         </div>
-        <span class="text-sm text-dark-gray">{{ feedUser.instagramHandle }}</span>
+        <span class="text-sm text-dark-gray font-montserrat max-w-[11ch] truncate">{{
+          feedUser.instagramHandle
+        }}</span>
       </div>
     </div>
   </div>

@@ -10,7 +10,6 @@ const router = useRouter()
 
 const game = ref(null)
 const rankedPlayers = ref([])
-const topFive = ref([])
 const loading = ref(true)
 
 const showExitModal = ref(false)
@@ -77,7 +76,6 @@ const loadData = async () => {
     if (u.count !== 3) return
 
     const completionMs = u.lastTime
-
     if (!completionMs || completionMs <= startMs) {
       list.push({
         id,
@@ -101,86 +99,29 @@ const loadData = async () => {
   })
 
   list.sort((a, b) => {
-    if (b.approvedCount !== a.approvedCount) {
-      return b.approvedCount - a.approvedCount
-    }
-
-    if (a.timeMs !== b.timeMs) {
-      return a.timeMs - b.timeMs
-    }
-
+    if (b.approvedCount !== a.approvedCount) return b.approvedCount - a.approvedCount
+    if (a.timeMs !== b.timeMs) return a.timeMs - b.timeMs
     return a.handle.localeCompare(b.handle)
   })
 
   rankedPlayers.value = list.map((item, i) => ({ ...item, rank: i + 1 }))
-  topFive.value = rankedPlayers.value.slice(0, 5)
-
-  const currentUser = JSON.parse(localStorage.getItem('bmg_user') || '{}')
-  const myId = currentUser.id
-
-  if (!myId) {
-    playerStatus.value = {
-      message: 'Not logged in',
-      class: 'text-red-600 text-5xl font-black tracking-tighter',
-    }
-    return
-  }
-
-  const myEntry = rankedPlayers.value.find((r) => r.id === myId || String(r.id) === String(myId))
-
-  if (myEntry) {
-    if (myEntry.rank <= 5) {
-      playerStatus.value = {
-        message: 'In the Top 5',
-        class: 'text-green-600 text-5xl font-black tracking-tighter',
-      }
-    } else {
-      playerStatus.value = {
-        message: `Rank #${myEntry.rank}`,
-        class: 'text-purple-600 text-5xl font-black tracking-tighter',
-      }
-    }
-  } else {
-    playerStatus.value = {
-      message: 'Not ranked yet',
-      class: 'text-slate text-5xl font-black tracking-tighter',
-    }
-  }
 }
 
 const playerStatus = computed(() => {
   const currentUser = JSON.parse(localStorage.getItem('bmg_user') || '{}')
   const myId = currentUser.id
 
-  if (!myId) {
-    return {
-      message: 'Not logged in',
-      class: 'text-red-600 text-5xl font-black tracking-tighter',
-    }
-  }
+  if (!myId)
+    return { message: 'Not logged in', class: 'text-red-600 text-5xl font-black tracking-tighter' }
 
   if (rankedPlayers.value.length === 0) {
-    return {
-      message: 'Loading...',
-      class: 'text-slate text-5xl font-black tracking-tighter',
-    }
+    return { message: 'Loading...', class: 'text-slate text-5xl font-black tracking-tighter' }
   }
 
   const myEntry = rankedPlayers.value.find((r) => r.id === myId || String(r.id) === String(myId))
 
-  if (!myEntry) {
-    return {
-      message: 'Not ranked yet',
-      class: 'text-slate text-5xl font-black tracking-tighter',
-    }
-  }
-
-  if (myEntry.rank <= 5) {
-    return {
-      message: 'In the Top 5',
-      class: 'text-green-600 text-5xl font-black tracking-tighter',
-    }
-  }
+  if (!myEntry)
+    return { message: 'Not ranked yet', class: 'text-slate text-5xl font-black tracking-tighter' }
 
   return {
     message: `Rank #${myEntry.rank}`,
@@ -193,13 +134,18 @@ onUnmounted(() => unsub && unsub())
 const statusBg = (s) =>
   s === 'approved' ? 'bg-green-500' : s === 'rejected' ? 'bg-red-500' : 'bg-gray-300'
 
+const getRankColor = (rank) => {
+  if (rank === 1) return 'text-yellow-600'
+  if (rank === 2) return 'text-gray-600'
+  if (rank === 3) return 'text-orange-600'
+  return 'text-purple-600' // Updated: Rank #4 and above = primary purple
+}
+
 const rankBadge = (r) => {
   if (r === 1) return 'bg-yellow-500'
   if (r === 2) return 'bg-gray-600'
   if (r === 3) return 'bg-orange-500'
-  if (r === 4) return 'bg-purple-500'
-  if (r === 5) return 'bg-purple-500'
-  return 'bg-blue-500'
+  return 'bg-purple-600'
 }
 
 const rankBg = (r) => {
@@ -209,14 +155,9 @@ const rankBg = (r) => {
     return 'flex items-center justify-between rounded-lg transition-all border bg-gray-50 border-gray-400 shadow-xl'
   if (r === 3)
     return 'flex items-center justify-between rounded-lg transition-all border bg-orange-50 border-orange-400 shadow-xl'
-  if (r === 4)
-    return 'flex items-center justify-between rounded-lg transition-all border bg-purple-50 border-purple-400 shadow-xl'
-  if (r === 5)
-    return 'flex items-center justify-between rounded-lg transition-all border bg-purple-50 border-purple-400 shadow-xl'
-  return 'flex items-center justify-between rounded-lg transition-all border bg-blue-50 border-blue-400 shadow-xl'
+  return 'flex items-center justify-between rounded-lg transition-all border bg-purple-50 border-purple-400 shadow-xl'
 }
 
-// Format milliseconds to mm:ss.SSS
 function formatDetailedTime(ms) {
   if (typeof ms !== 'number' || ms < 0) return '—'
   const totalSeconds = Math.floor(ms / 1000)
@@ -228,7 +169,7 @@ function formatDetailedTime(ms) {
 </script>
 
 <template>
-  <div class="min-h-screen bg-soft font-montserrat">
+  <div class="main min-h-screen bg-soft font-montserrat">
     <header class="bg-white shadow-xl px-4 py-4 sticky top-0 z-10">
       <div class="flex justify-between items-center w-full max-w-4xl mx-auto">
         <div class="flex items-center gap-2">
@@ -251,69 +192,48 @@ function formatDetailedTime(ms) {
       </div>
     </header>
 
-    <div
-      v-if="game?.status === 'ended'"
-      class="flex flex-col items-center justify-center min-h-[calc(100vh-80px)] text-center px-4"
-    >
-      <div class="bg-white rounded-3xl shadow-2xl p-10 max-w-md w-full border border-purple-200">
-        <h2 class="text-4xl font-bold text-dark-gray mb-6">Game Has Ended!</h2>
-        <p class="text-lg text-slate mb-8">
-          The game has concluded. Thank you for participating! Winners will be contacted via
-          Instagram. You can exit now
-        </p>
-        <button
-          @click="confirmExit"
-          class="px-10 py-4 bg-primary text-white font-bold rounded-xl hover:bg-primary/90 transition cursor-pointer"
-          :disabled="isLoggingOut"
-        >
-          {{ isLoggingOut ? 'Logging out...' : 'Exit' }}
-        </button>
-      </div>
-    </div>
-
     <div class="max-w-4xl mx-auto px-4 py-6">
-      <div class="flex justify-center items-center my-12">
+      <div class="flex justify-center items-center mt-12 mb-2">
         <img :src="leaderboardLogo" alt="Leaderboard Logo" class="h-16 md:h-24" />
       </div>
 
       <div v-if="loading" class="text-center py-20 text-slate">Loading, please wait patiently</div>
 
       <div v-else class="space-y-4">
-        <div v-for="entry in topFive" :key="entry.id" class="grid grid-cols-2 gap-4">
+        <div v-for="entry in rankedPlayers" :key="entry.id" class="grid grid-cols-2 gap-4">
           <div class="flex items-center p-3 md:p-4 rounded-md" :class="rankBg(entry.rank)">
             <h6
-              class="w-8 h-8 md:w-14 md:h-14 rounded-full flex items-center justify-center text-white font-bold text-sm md:text-xl mr-2 shadow-md"
+              class="w-8 h-8 md:w-14 md:h-14 rounded-full flex items-center justify-center text-white font-bold text-sm md:text-2xl mr-2 shadow-md"
               :class="rankBadge(entry.rank)"
             >
               {{ entry.rank }}<sup>{{ ['st', 'nd', 'rd'][entry.rank - 1] || 'th' }}</sup>
             </h6>
-            <div class="flex-1">
-              <div class="font-semibold text-sm md:text-xl text-dark-gray font-montserrat">
+            <div class="flex-1 min-w-0">
+              <div
+                class="font-semibold text-sm md:text-xl font-montserrat max-w-[23ch] sm:max-w-full truncate"
+                :class="getRankColor(entry.rank)"
+              >
                 {{ entry.handle }}
               </div>
             </div>
           </div>
+
           <div class="grid grid-cols-3 gap-4">
             <div v-for="i in [0, 1, 2]" :key="i" class="flex justify-center">
               <div
                 class="w-full h-auto rounded-md flex items-center justify-center text-white font-bold text-xs md:text-sm shadow-md"
                 :class="statusBg(entry.statuses[i])"
-              >
-                <!-- No text inside squares anymore -->
-              </div>
+              ></div>
             </div>
           </div>
         </div>
-
+        <!-- Update: rank number -->
         <div
           class="mt-12 p-10 bg-white rounded-3xl shadow-2xl border border-purple-200 text-center"
         >
           <p class="text-lg tracking-wider text-slate mb-4">You are currently...</p>
           <p class="font-semibold text-2xl" :class="playerStatus.class">
             {{ playerStatus.message }}
-          </p>
-          <p v-if="playerStatus.rank" class="mt-4 text-slate text-lg">
-            (Rank #{{ playerStatus.rank }} overall)
           </p>
         </div>
       </div>
@@ -350,6 +270,10 @@ function formatDetailedTime(ms) {
 </template>
 
 <style>
+.main {
+  background-image: radial-gradient(circle, hsl(270 50% 88%) 0.125rem, transparent 0.125rem);
+  background-size: 1.25rem 1.25rem;
+}
 .fade-enter-active,
 .fade-leave-active {
   transition: opacity 0.3s ease;

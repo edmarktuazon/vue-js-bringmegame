@@ -267,8 +267,7 @@ const confirmLogout = async () => {
           />
 
           <GameStatus :current-game="currentGame" />
-
-          <Leaderboard :leaderboard="leaderboard" />
+          <Leaderboard :leaderboard="leaderboard" :currentUserRank="currentUserRank" />
 
           <PrizeEditorForm :current-game="currentGame" @prize-saved="loadGameData" />
         </div>
