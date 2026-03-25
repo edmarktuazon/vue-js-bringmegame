@@ -6,6 +6,8 @@ import { db } from '/firebase/config'
 import { getActiveGame } from '/firebase/gameHelpers'
 import { useRouter } from 'vue-router'
 
+import GameEndModal from '../components/game/GameEndModal.vue'
+
 const router = useRouter()
 
 const game = ref(null)
@@ -14,6 +16,21 @@ const loading = ref(true)
 
 const showExitModal = ref(false)
 const isLoggingOut = ref(false)
+
+const showRankModal = ref(false)
+const userRank = ref(null)
+
+const detectUserRank = () => {
+  const currentUser = JSON.parse(localStorage.getItem('bmg_user') || '{}')
+  const myId = currentUser.id
+  if (!myId) return
+
+  const myEntry = rankedPlayers.value.find((r) => String(r.id) === String(myId))
+  if (myEntry) {
+    userRank.value = myEntry.rank
+    showRankModal.value = true
+  }
+}
 
 const confirmExit = () => {
   isLoggingOut.value = true
@@ -35,6 +52,11 @@ onMounted(async () => {
   unsub = onSnapshot(collection(db, 'games', game.value.id, 'submissions'), loadData)
 
   loading.value = false
+
+  // Delay before showing rank modal (0.8 seconds)
+  setTimeout(() => {
+    detectUserRank()
+  }, 800)
 })
 
 const loadData = async () => {
@@ -138,7 +160,7 @@ const getRankColor = (rank) => {
   if (rank === 1) return 'text-yellow-600'
   if (rank === 2) return 'text-gray-600'
   if (rank === 3) return 'text-orange-600'
-  return 'text-purple-600' // Updated: Rank #4 and above = primary purple
+  return 'text-purple-600'
 }
 
 const rankBadge = (r) => {
@@ -227,7 +249,7 @@ function formatDetailedTime(ms) {
             </div>
           </div>
         </div>
-        <!-- Update: rank number -->
+
         <div
           class="mt-12 p-10 bg-white rounded-3xl shadow-2xl border border-purple-200 text-center"
         >
@@ -238,6 +260,8 @@ function formatDetailedTime(ms) {
         </div>
       </div>
     </div>
+
+    <GameEndModal v-model="showRankModal" :user-rank="userRank" @exit="showRankModal = false" />
 
     <Transition name="fade">
       <div
