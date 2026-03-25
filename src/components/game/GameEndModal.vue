@@ -26,37 +26,35 @@ const isTopThree = computed(() => props.userRank && props.userRank <= 3)
         <div class="mb-6">
           <div
             v-if="isFirst"
-            class="w-24 h-24 mx-auto bg-yellow-100 rounded-full flex items-center justify-center text-6xl"
+            class="w-24 h-24 mx-auto bg-yellow-100 rounded-full flex items-center justify-center text-6xl shadow"
           >
             🏆
           </div>
           <div
             v-else-if="isTopThree"
-            class="w-24 h-24 mx-auto bg-orange-100 rounded-full flex items-center justify-center text-6xl"
+            class="w-24 h-24 mx-auto bg-orange-100 rounded-full flex items-center justify-center text-6xl shadow"
           >
             🎉
           </div>
           <div
             v-else
-            class="w-24 h-24 mx-auto bg-purple-100 rounded-full flex items-center justify-center text-6xl"
+            class="w-24 h-24 mx-auto bg-purple-100 rounded-full flex items-center justify-center text-6xl shadow"
           >
             👏
           </div>
         </div>
 
-        <!-- Title -->
         <h2 v-if="isFirst" class="text-4xl font-bold text-yellow-600 mb-1">Congratulations!!!</h2>
         <h2 v-else-if="isTopThree" class="text-3xl font-bold text-orange-600 mb-1">
           Better Luck Next Time!
         </h2>
         <h2 v-else class="text-3xl font-bold text-purple-600 mb-1">Thank You for Playing!</h2>
 
-        <!-- Emojis for 1st place -->
-        <div v-if="isFirst" class="text-3xl mb-4">🎉 🥳 🎊</div>
+        <div v-if="isFirst" class="text-4xl mb-4">🎉 🥳 🎊</div>
 
         <!-- Rank Box -->
         <div class="bg-purple-50 rounded-2xl p-6 my-6">
-          <p class="text-slate mb-2 text-sm">You finished:</p>
+          <p class="text-slate mb-2">You finished:</p>
           <p
             class="text-5xl font-bold"
             :class="{
@@ -69,13 +67,13 @@ const isTopThree = computed(() => props.userRank && props.userRank <= 3)
           </p>
         </div>
 
-        <p class="text-slate text-sm mb-8">
+        <p class="text-slate text-sm mb-8 leading-relaxed">
           The official leaderboard will be announced on our Instagram page tonight.
         </p>
 
         <button
           @click="emit('exit')"
-          class="w-full py-4 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-2xl transition"
+          class="w-full py-4 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-2xl transition text-lg"
         >
           Exit Game
         </button>

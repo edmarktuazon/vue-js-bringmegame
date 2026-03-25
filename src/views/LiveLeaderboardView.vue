@@ -53,10 +53,9 @@ onMounted(async () => {
 
   loading.value = false
 
-  // Delay before showing rank modal (0.8 seconds)
   setTimeout(() => {
     detectUserRank()
-  }, 800)
+  }, 600)
 })
 
 const loadData = async () => {
