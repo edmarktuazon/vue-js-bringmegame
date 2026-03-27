@@ -1,5 +1,5 @@
 <script setup>
-import leaderboardLogo from '../assets/images/leaderboard-img-logo'
+import leaderboardLogo from '../assets/images/leaderboard-img-logo.jpg'
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { onSnapshot, collection, getDocs, doc } from 'firebase/firestore'
 import { db } from '/firebase/config'
