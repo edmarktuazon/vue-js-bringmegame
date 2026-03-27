@@ -1,6 +1,5 @@
 <script setup>
 import { computed } from 'vue'
-import UploadedPhotosGrid from './UploadedPhotosGrid.vue'
 import ConfettiCompletion from './ConfettiCompletion.vue'
 
 const props = defineProps({
@@ -32,7 +31,7 @@ const isCompleted = computed(() => {
       ></div>
     </div>
 
-    <!-- Upload -->
+    <!-- Upload Section -->
     <div v-if="nextPromptIndex !== null" class="space-y-4">
       <div class="bg-white rounded-lg shadow-sm p-12">
         <!-- Header -->
@@ -106,9 +105,6 @@ const isCompleted = computed(() => {
             @change="(e) => emit('photo-select', nextPromptIndex, e)"
           />
         </label>
-
-        <!-- Uploaded photos -->
-        <UploadedPhotosGrid v-if="Object.keys(submissions).length > 0" :submissions="submissions" />
       </div>
     </div>
 

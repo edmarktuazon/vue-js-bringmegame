@@ -1,7 +1,7 @@
 <script setup>
 import leaderboardLogo from '../assets/images/leaderboard-logo.jpg'
 import { ref, onMounted, onUnmounted, computed } from 'vue'
-import { onSnapshot, collection, getDocs } from 'firebase/firestore'
+import { onSnapshot, collection, getDocs, doc } from 'firebase/firestore'
 import { db } from '/firebase/config'
 import { getActiveGame } from '/firebase/gameHelpers'
 import { useRouter } from 'vue-router'
@@ -20,18 +20,6 @@ const isLoggingOut = ref(false)
 const showRankModal = ref(false)
 const userRank = ref(null)
 
-const detectUserRank = () => {
-  const currentUser = JSON.parse(localStorage.getItem('bmg_user') || '{}')
-  const myId = currentUser.id
-  if (!myId) return
-
-  const myEntry = rankedPlayers.value.find((r) => String(r.id) === String(myId))
-  if (myEntry) {
-    userRank.value = myEntry.rank
-    showRankModal.value = true
-  }
-}
-
 const confirmExit = () => {
   isLoggingOut.value = true
   localStorage.removeItem('bmg_user')
@@ -43,6 +31,7 @@ const cancelExit = () => {
 }
 
 let unsub = null
+let unsubGame = null
 
 onMounted(async () => {
   game.value = await getActiveGame()
@@ -51,12 +40,27 @@ onMounted(async () => {
   await loadData()
   unsub = onSnapshot(collection(db, 'games', game.value.id, 'submissions'), loadData)
 
-  loading.value = false
+  // Real-time listener for game status
+  setupGameListener()
 
-  setTimeout(() => {
-    detectUserRank()
-  }, 600)
+  loading.value = false
 })
+
+const setupGameListener = () => {
+  if (!game.value?.id) return
+
+  unsubGame = onSnapshot(doc(db, 'games', game.value.id), (docSnap) => {
+    if (docSnap.exists()) {
+      game.value = { id: docSnap.id, ...docSnap.data() }
+
+      if (game.value.status === 'ended') {
+        setTimeout(() => {
+          detectUserRank()
+        }, 800)
+      }
+    }
+  })
+}
 
 const loadData = async () => {
   if (!game.value?.id) return
@@ -128,6 +132,23 @@ const loadData = async () => {
   rankedPlayers.value = list.map((item, i) => ({ ...item, rank: i + 1 }))
 }
 
+const detectUserRank = () => {
+  const currentUser = JSON.parse(localStorage.getItem('bmg_user') || '{}')
+  const myId = currentUser.id
+  if (!myId) return
+
+  const myEntry = rankedPlayers.value.find((r) => String(r.id) === String(myId))
+  if (myEntry) {
+    userRank.value = myEntry.rank
+    showRankModal.value = true
+  }
+}
+
+onUnmounted(() => {
+  if (unsub) unsub()
+  if (unsubGame) unsubGame()
+})
+
 const playerStatus = computed(() => {
   const currentUser = JSON.parse(localStorage.getItem('bmg_user') || '{}')
   const myId = currentUser.id
@@ -149,8 +170,6 @@ const playerStatus = computed(() => {
     class: 'text-purple-600 text-5xl font-black tracking-tighter',
   }
 })
-
-onUnmounted(() => unsub && unsub())
 
 const statusBg = (s) =>
   s === 'approved' ? 'bg-green-500' : s === 'rejected' ? 'bg-red-500' : 'bg-gray-300'
@@ -260,7 +279,12 @@ function formatDetailedTime(ms) {
       </div>
     </div>
 
-    <GameEndModal v-model="showRankModal" :user-rank="userRank" @exit="showRankModal = false" />
+    <GameEndModal
+      v-model="showRankModal"
+      :user-rank="userRank"
+      @exit="showRankModal = false"
+      @logout="confirmExit"
+    />
 
     <Transition name="fade">
       <div
