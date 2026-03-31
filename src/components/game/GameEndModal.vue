@@ -51,19 +51,19 @@ const isTopThree = computed(() => props.userRank && props.userRank <= 3 && props
         </div>
 
         <!-- Title -->
-        <div class="flex items-center justify-evenly">
-          <h2 v-if="isFirst" class="text-2xl font-bold mb-1">Congratulations!!!</h2>
-          <h2 v-else-if="isSecond" class="text-2xl font-bold text-gray-600 mb-1">
+        <div class="flex items-center justify-evenly flex-col sm:flex-row mb-6">
+          <h2 v-if="isFirst" class="text-2xl font-bold mb-1 text-yellow-400">Congratulations!!!</h2>
+          <h2 v-else-if="isSecond" class="text-2xl font-bold text-gray-400 mb-1">
             Wow.. So Close!
           </h2>
-          <h2 v-else-if="isTopThree" class="text-2xl font-bold text-orange-600 mb-1">
+          <h2 v-else-if="isTopThree" class="text-2xl font-bold text-orange-400 mb-1">
             Better Luck Next Time!
           </h2>
           <h2 v-else class="text-2xl font-bold mb-1">Thank You for Playing!</h2>
 
           <!-- Emojis -->
-          <div v-if="isFirst" class="text-2xl mb-4">🎉 🏅 🙌</div>
-          <div v-else-if="isSecond" class="text-2xl mb-4">😭</div>
+          <div v-if="isFirst" class="text-2xl mb-4">🎉🏅🙌</div>
+          <div v-else-if="isSecond" class="text-2xl mb-4">😭😭😭</div>
           <div v-else-if="isTopThree" class="text-2xl mb-4">🤞</div>
         </div>
 
@@ -73,10 +73,10 @@ const isTopThree = computed(() => props.userRank && props.userRank <= 3 && props
           <p
             class="text-5xl font-bold"
             :class="{
-              'text-yellow-600': isFirst,
-              'text-gray-600': isSecond,
-              'text-orange-600': isTopThree && !isSecond,
-              'text-purple-600': !isFirst && !isSecond && !isTopThree,
+              'text-yellow-400': isFirst,
+              'text-gray-400': isSecond,
+              'text-orange-400': isTopThree && !isSecond,
+              'text-purple-400': !isFirst && !isSecond && !isTopThree,
             }"
           >
             Rank #{{ props.userRank }}

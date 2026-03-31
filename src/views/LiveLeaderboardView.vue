@@ -1,5 +1,5 @@
 <script setup>
-import leaderboardLogo from '../assets/images/leaderboard-img-logo.jpg'
+import leaderboardLogo from '../assets/images/leaderboard-img-logo.png'
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { onSnapshot, collection, getDocs, doc } from 'firebase/firestore'
 import { db } from '/firebase/config'
@@ -233,8 +233,8 @@ function formatDetailedTime(ms) {
     </header>
 
     <div class="max-w-4xl mx-auto px-4 py-6">
-      <div class="flex justify-center items-center mt-12 mb-2">
-        <img :src="leaderboardLogo" alt="Leaderboard Logo" class="h-16 md:h-24" />
+      <div class="flex justify-center items-center mt-4 md:mt-12 mb-2">
+        <img :src="leaderboardLogo" alt="Leaderboard Logo" class="h-28 md:h-44" />
       </div>
 
       <div v-if="loading" class="text-center py-20 text-slate">Loading, please wait patiently</div>
