@@ -237,7 +237,7 @@ const handleRejectSubmission = async (submission) => {
       <p class="text-slate text-sm">No {{ activeTab }} submissions found.</p>
     </div>
 
-    <div v-else class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+    <div v-else class="grid grid-cols-1 sm:grid-cols-3 gap-4">
       <div
         v-for="sub in currentSubmissions"
         :key="`${sub.gameId}_${sub.id}`"

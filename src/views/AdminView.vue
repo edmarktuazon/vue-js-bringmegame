@@ -256,31 +256,21 @@ const confirmLogout = async () => {
     <!-- Main content -->
     <main class="max-w-6xl mx-auto px-4 py-8">
       <h1 class="text-3xl font-bold text-dark-gray mb-8">Admin Panel</h1>
+      <!-- <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
 
+      </div> -->
+      <div class="mb-6">
+        <SubmissionsGallery
+          :current-game="currentGame"
+          :all-submissions="allSubmissions"
+          :users="users"
+          v-model:selected-user="selectedUser"
+        />
+      </div>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
         <!-- Left Column -->
         <div class="space-y-6 row-end-3 md:row-end-auto">
-          <CreateGameForm
-            :current-game="currentGame"
-            :loading-game="loadingGame"
-            @game-created="loadGameData"
-          />
-
           <GameStatus :current-game="currentGame" />
-          <Leaderboard :leaderboard="leaderboard" />
-
-          <PrizeEditorForm :current-game="currentGame" @prize-saved="loadGameData" />
-        </div>
-
-        <!-- Right column -->
-        <div class="space-y-6">
-          <SubmissionsGallery
-            :current-game="currentGame"
-            :all-submissions="allSubmissions"
-            :users="users"
-            v-model:selected-user="selectedUser"
-          />
-
           <!-- Live feed -->
           <div class="bg-white rounded-lg shadow-sm p-6">
             <h3 class="text-lg font-semibold text-dark-gray mb-4">
@@ -304,6 +294,17 @@ const confirmLogout = async () => {
               </div>
             </div>
           </div>
+          <CreateGameForm
+            :current-game="currentGame"
+            :loading-game="loadingGame"
+            @game-created="loadGameData"
+          />
+        </div>
+
+        <!-- Right column -->
+        <div class="space-y-6">
+          <Leaderboard :leaderboard="leaderboard" />
+          <PrizeEditorForm :current-game="currentGame" @prize-saved="loadGameData" />
         </div>
       </div>
     </main>
