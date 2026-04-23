@@ -255,7 +255,6 @@ const confirmLogout = async () => {
 
     <!-- Main content -->
     <main class="max-w-6xl mx-auto px-4 py-8">
-      <h1 class="text-3xl font-bold text-dark-gray mb-8">Admin Panel</h1>
       <!-- <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
 
       </div> -->
