@@ -16,7 +16,7 @@ defineProps({
           d="M13 10V3L4 14h7v7l9-11h-7z"
         />
       </svg>
-      <h2 class="text-lg font-semibold text-dark-gray">Fastest Submissions (Photos Unverified)</h2>
+      <h2 class="text-lg font-semibold text-dark-gray">Fastest Submissions</h2>
     </div>
     <p class="text-xs text-slate mb-4">Top 10 fastest players who completed all 3 prompts.</p>
 
@@ -24,7 +24,7 @@ defineProps({
       There are currently no active players.
     </div>
 
-    <div v-else class="space-y-3">
+    <div v-else class="space-y-3 max-h-96 overflow-y-auto">
       <div
         v-for="entry in leaderboard"
         :key="entry.userId"

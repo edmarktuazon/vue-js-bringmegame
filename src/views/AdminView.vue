@@ -195,9 +195,9 @@ const updateLeaderboard = () => {
     }
   })
 
+  // Removed .slice(0, 10) — show all complete submissions
   leaderboard.value = entries
     .sort((a, b) => a.totalTime - b.totalTime)
-    .slice(0, 10)
     .map((e, i) => ({ ...e, rank: i + 1 }))
 }
 
@@ -267,7 +267,7 @@ const confirmLogout = async () => {
           />
 
           <GameStatus :current-game="currentGame" />
-          <Leaderboard :leaderboard="leaderboard" :currentUserRank="currentUserRank" />
+          <Leaderboard :leaderboard="leaderboard" />
 
           <PrizeEditorForm :current-game="currentGame" @prize-saved="loadGameData" />
         </div>
@@ -281,7 +281,7 @@ const confirmLogout = async () => {
             v-model:selected-user="selectedUser"
           />
 
-          <!--Live feed -->
+          <!-- Live feed -->
           <div class="bg-white rounded-lg shadow-sm p-6">
             <h3 class="text-lg font-semibold text-dark-gray mb-4">
               Live Players ({{ liveFeed.length }})

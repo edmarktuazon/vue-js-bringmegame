@@ -59,7 +59,8 @@ const currentSubmissions = computed(() => {
       break
   }
 
-  return subs.sort((a, b) => (b.uploadedAt?.toMillis?.() || 0) - (a.uploadedAt?.toMillis?.() || 0))
+  // Sort by promptIndex ascending (1st, 2nd, 3rd)
+  return subs.sort((a, b) => a.promptIndex - b.promptIndex)
 })
 
 const submissionCounts = computed(() => {
@@ -152,10 +153,7 @@ const handleRejectSubmission = async (submission) => {
 </script>
 
 <template>
-  <div
-    class="bg-white rounded-lg shadow-sm p-6"
-    style="max-height: calc(100vh - 200px); overflow-y: auto"
-  >
+  <div class="bg-white rounded-lg shadow-sm p-6">
     <div class="flex items-center justify-between mb-4">
       <div class="flex items-center gap-2">
         <svg class="w-auto h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -239,7 +237,6 @@ const handleRejectSubmission = async (submission) => {
       <p class="text-slate text-sm">No {{ activeTab }} submissions found.</p>
     </div>
 
-    <!-- Submissions grid -->
     <div v-else class="grid grid-cols-1 sm:grid-cols-2 gap-4">
       <div
         v-for="sub in currentSubmissions"
@@ -332,7 +329,7 @@ const handleRejectSubmission = async (submission) => {
         @click.self="closeModal"
       >
         <div
-          class="relative bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-auto shadow-2xl"
+          class="relative bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-hidden shadow-2xl"
         >
           <!-- Close button -->
           <button
