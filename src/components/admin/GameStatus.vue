@@ -48,13 +48,21 @@ const handleStatusChange = async () => {
 
   try {
     await updateGameStatus(props.currentGame.id, newStatus)
-    alert(`Game is now ${newStatus.toUpperCase()}`)
+    alert(`Game is now ${statusLabel(newStatus)}`)
   } catch (error) {
     alert('Failed to update game status: ' + (error.message || 'Unknown error'))
     localStatus.value = oldStatus
   } finally {
     isUpdating.value = false
   }
+}
+
+// Display label mapping
+const statusLabel = (status) => {
+  if (status === 'waiting') return 'OPEN'
+  if (status === 'active') return 'PLAYING'
+  if (status === 'ended') return 'CLOSED'
+  return status.toUpperCase()
 }
 </script>
 
@@ -92,11 +100,11 @@ const handleStatusChange = async () => {
         :disabled="isUpdating"
         class="w-full px-3 py-2 bg-soft text-sm rounded-md border-0 focus:outline-none focus:ring-2 focus:ring-primary cursor-pointer disabled:opacity-50"
       >
-        <option value="waiting">Waiting</option>
+        <option value="waiting">Open</option>
         <option value="active" :disabled="!hasThreePrompts">
-          Active {{ !hasThreePrompts ? '(Requires 3 valid prompts)' : '' }}
+          Playing {{ !hasThreePrompts ? '(Requires 3 valid prompts)' : '' }}
         </option>
-        <option value="ended">Ended</option>
+        <option value="ended">Closed</option>
       </select>
 
       <div v-if="isUpdating" class="mt-3 text-center text-sm text-primary">Updating status...</div>

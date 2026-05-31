@@ -34,7 +34,7 @@ const modelValue = defineModel()
             :disabled="isLoggingOut"
             class="px-4 py-2 text-sm font-medium text-white rounded-md bg-primary disabled:opacity-50 cursor-pointer"
           >
-            {{ isLoggingOut ? 'Exiting game...' : 'Exit Game' }}
+            {{ isLoggingOut ? 'Exiting game...' : 'Yes, exit' }}
           </button>
         </div>
       </div>

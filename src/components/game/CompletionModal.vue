@@ -44,12 +44,6 @@ const modelValue = defineModel()
             {{ completionTime?.formattedTime || 'Calculating...' }}
           </div>
         </div>
-
-        <p class="text-sm text-slate mb-6">
-          <strong>Note:</strong> Your submission is now under review. Winners will be contacted via
-          Instagram. You may now proceed to the leaderboard to see how you rank against other
-          players or else exit the game.
-        </p>
         <div class="flex flex-col gap-3">
           <router-link
             to="/leaderboard"

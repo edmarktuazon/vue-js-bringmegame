@@ -38,11 +38,13 @@ onMounted(async () => {
   if (!game.value) return router.push('/')
 
   await loadData()
-  unsub = onSnapshot(collection(db, 'games', game.value.id, 'submissions'), loadData)
 
-  // Real-time listener for game status
+  // Real time listener
+  unsub = onSnapshot(collection(db, 'games', game.value.id, 'submissions'), (snapshot) =>
+    processSubmissions(snapshot),
+  )
+
   setupGameListener()
-
   loading.value = false
 })
 
@@ -62,10 +64,17 @@ const setupGameListener = () => {
   })
 }
 
+// Initial load using getDocs
 const loadData = async () => {
   if (!game.value?.id) return
-
   const snap = await getDocs(collection(db, 'games', game.value.id, 'submissions'))
+  processSubmissions(snap)
+}
+
+// Core logic, used by both getDocs (initial) and onSnapshot (real-time)
+const processSubmissions = (snap) => {
+  if (!game.value?.id) return
+
   const userMap = new Map()
   const startMs = game.value.startTime?.toMillis ? game.value.startTime.toMillis() : 0
 
@@ -80,6 +89,7 @@ const loadData = async () => {
         lastTime: 0,
         statuses: [null, null, null],
         count: 0,
+        isDisqualified: false,
       })
     }
 
@@ -94,11 +104,30 @@ const loadData = async () => {
     if (data.status === 'approved') {
       u.approvedCount++
     }
+
+    // Flag entire player as DQ if ANY submission is disqualified
+    if (data.status === 'disqualified') {
+      u.isDisqualified = true
+    }
   })
 
   const list = []
   userMap.forEach((u, id) => {
     if (u.count !== 3) return
+
+    // DQ player, force score 0 and push to bottom
+    if (u.isDisqualified) {
+      list.push({
+        id,
+        handle: u.handle,
+        approvedCount: 0,
+        timeMs: Infinity,
+        timeStr: '—',
+        statuses: u.statuses,
+        isDisqualified: true,
+      })
+      return
+    }
 
     const completionMs = u.lastTime
     if (!completionMs || completionMs <= startMs) {
@@ -108,6 +137,7 @@ const loadData = async () => {
         approvedCount: u.approvedCount || 0,
         timeStr: '—',
         statuses: u.statuses,
+        isDisqualified: false,
       })
       return
     }
@@ -120,10 +150,14 @@ const loadData = async () => {
       timeMs,
       timeStr: formatDetailedTime(timeMs),
       statuses: u.statuses,
+      isDisqualified: false,
     })
   })
 
+  // DQ players always at the bottom
   list.sort((a, b) => {
+    if (a.isDisqualified && !b.isDisqualified) return 1
+    if (!a.isDisqualified && b.isDisqualified) return -1
     if (b.approvedCount !== a.approvedCount) return b.approvedCount - a.approvedCount
     if (a.timeMs !== b.timeMs) return a.timeMs - b.timeMs
     return a.handle.localeCompare(b.handle)
@@ -171,6 +205,7 @@ const playerStatus = computed(() => {
   }
 })
 
+// Disqualified shows as plain gray. DQ status is hidden from public
 const statusBg = (s) =>
   s === 'approved' ? 'bg-green-500' : s === 'rejected' ? 'bg-red-500' : 'bg-gray-300'
 
@@ -198,6 +233,7 @@ const rankBg = (r) => {
   return 'flex items-center justify-between rounded-lg transition-all border bg-purple-50 border-purple-400 shadow-xl'
 }
 
+// formatted time string
 function formatDetailedTime(ms) {
   if (typeof ms !== 'number' || ms < 0) return '—'
   const totalSeconds = Math.floor(ms / 1000)
@@ -307,7 +343,7 @@ function formatDetailedTime(ms) {
               class="px-8 py-3 bg-primary text-white rounded-xl hover:bg-primary/90 transition cursor-pointer"
               :disabled="isLoggingOut"
             >
-              {{ isLoggingOut ? 'Logging out...' : 'Exit Leaderboard' }}
+              {{ isLoggingOut ? 'Logging out...' : 'Yes, exit' }}
             </button>
           </div>
         </div>

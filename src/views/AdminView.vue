@@ -18,12 +18,11 @@ import SubmissionsGallery from '../components/admin/SubmissionsGallery.vue'
 
 const router = useRouter()
 
-// ===============================================
-// SHARED STATE
-// ===============================================
+// Share states
 const currentGame = ref(null)
 const allSubmissions = ref([])
 const leaderboard = ref([])
+const liveLeaderboard = ref([]) // NEW
 const users = ref(['All Users'])
 const selectedUser = ref('All Users')
 const loadingGame = ref(false)
@@ -37,9 +36,7 @@ let unsubscribeSubs = null
 let unsubscribeGame = null
 let unsubscribeLiveFeed = null
 
-// ===============================================
-// LIFECYCLE
-// ===============================================
+// Lifecycle hooks
 onMounted(() => {
   loadGameData()
 })
@@ -50,9 +47,7 @@ onUnmounted(() => {
   if (unsubscribeLiveFeed) unsubscribeLiveFeed()
 })
 
-// ===============================================
-// LOAD ACTIVE GAME & SETUP REAL-TIME LISTENERS
-// ===============================================
+// Load game data and set up listeners
 const loadGameData = async () => {
   try {
     loadingGame.value = true
@@ -64,10 +59,10 @@ const loadGameData = async () => {
       setupCurrentGameListener()
       setupLiveFeedListener()
     } else {
-      // No active game
       allSubmissions.value = []
       users.value = ['All Users']
       leaderboard.value = []
+      liveLeaderboard.value = []
       liveFeed.value = []
     }
   } catch (error) {
@@ -88,6 +83,7 @@ const setupCurrentGameListener = () => {
   unsubscribeSubs = listenToSubmissions(currentGame.value.id, (subs) => {
     allSubmissions.value = subs
     updateLeaderboard()
+    updateLiveLeaderboard()
     updateUsersList(subs)
   })
 
@@ -132,9 +128,7 @@ watch(
   },
 )
 
-// ===============================================
-// UPDATE USERS DROPDOWN
-// ===============================================
+// Users list for filtering
 const updateUsersList = (subs) => {
   const handleSet = new Set(['All Users'])
 
@@ -151,9 +145,7 @@ const updateUsersList = (subs) => {
   })
 }
 
-// ===============================================
-// LEADERBOARD
-// ===============================================
+// Fastest completion leaderboard
 const updateLeaderboard = () => {
   if (allSubmissions.value.length === 0) {
     leaderboard.value = []
@@ -168,37 +160,129 @@ const updateLeaderboard = () => {
 
   const userBestTimes = {}
   allSubmissions.value.forEach((sub) => {
-    const { userId, instagramHandle, uploadedAt, promptIndex } = sub
+    const { userId, instagramHandle, uploadedAt, promptIndex, status } = sub
     if (!userId || !uploadedAt) return
 
     if (!userBestTimes[userId]) {
-      userBestTimes[userId] = { instagramHandle, times: [], prompts: new Set() }
+      userBestTimes[userId] = {
+        instagramHandle,
+        times: [],
+        prompts: new Set(),
+        isDisqualified: false,
+      }
     }
 
     const timeMs = uploadedAt.toMillis()
     userBestTimes[userId].times.push(timeMs)
     userBestTimes[userId].prompts.add(promptIndex)
+
+    if (status === 'disqualified') {
+      userBestTimes[userId].isDisqualified = true
+    }
   })
 
   const entries = []
   Object.entries(userBestTimes).forEach(([userId, info]) => {
     if (info.prompts.size === 3) {
+      if (info.isDisqualified) {
+        entries.push({
+          userId,
+          instagramHandle: info.instagramHandle,
+          totalTime: Infinity,
+          formattedTime: 'DQ',
+          isDisqualified: true,
+        })
+        return
+      }
+
       const completedAt = Math.max(...info.times)
       let totalTime = completedAt - gameStartTime
       if (totalTime < 0) totalTime = 0
       entries.push({
         userId,
         instagramHandle: info.instagramHandle,
-        totalTime: totalTime,
+        totalTime,
         formattedTime: formatDetailedTime(totalTime),
+        isDisqualified: false,
       })
     }
   })
 
-  // Removed .slice(0, 10) — show all complete submissions
   leaderboard.value = entries
-    .sort((a, b) => a.totalTime - b.totalTime)
+    .sort((a, b) => {
+      if (a.isDisqualified && !b.isDisqualified) return 1
+      if (!a.isDisqualified && b.isDisqualified) return -1
+      return a.totalTime - b.totalTime
+    })
     .map((e, i) => ({ ...e, rank: i + 1 }))
+}
+
+// Live leaderboard based on approvals and submission times
+const updateLiveLeaderboard = () => {
+  if (allSubmissions.value.length === 0) {
+    liveLeaderboard.value = []
+    return
+  }
+
+  const userMap = new Map()
+
+  allSubmissions.value.forEach((sub) => {
+    const { userId, instagramHandle, status, uploadedAt } = sub
+    if (!userId) return
+
+    if (!userMap.has(userId)) {
+      userMap.set(userId, {
+        handle: instagramHandle || 'unknown',
+        approvedCount: 0,
+        lastTime: 0,
+        count: 0,
+        isDisqualified: false,
+      })
+    }
+
+    const u = userMap.get(userId)
+    u.count++
+
+    if (uploadedAt?.toMillis() > u.lastTime) {
+      u.lastTime = uploadedAt.toMillis()
+    }
+
+    if (status === 'approved') u.approvedCount++
+    if (status === 'disqualified') u.isDisqualified = true
+  })
+
+  const list = []
+  userMap.forEach((u, id) => {
+    if (u.count !== 3) return
+
+    if (u.isDisqualified) {
+      list.push({
+        id,
+        handle: u.handle,
+        approvedCount: 0,
+        timeMs: Infinity,
+        isDisqualified: true,
+      })
+      return
+    }
+
+    list.push({
+      id,
+      handle: u.handle,
+      approvedCount: u.approvedCount,
+      timeMs: u.lastTime,
+      isDisqualified: false,
+    })
+  })
+
+  list.sort((a, b) => {
+    if (a.isDisqualified && !b.isDisqualified) return 1
+    if (!a.isDisqualified && b.isDisqualified) return -1
+    if (b.approvedCount !== a.approvedCount) return b.approvedCount - a.approvedCount
+    return a.timeMs - b.timeMs
+  })
+
+  liveLeaderboard.value = list.map((item, i) => ({ ...item, rank: i + 1 }))
 }
 
 const formatDetailedTime = (ms) => {
@@ -212,12 +296,17 @@ const formatDetailedTime = (ms) => {
   return `${minPart}${secPart}${msPart}`.trim()
 }
 
-// Watch submissions for leaderboard update
-watch(allSubmissions, updateLeaderboard, { deep: true })
+// Watch submissions for both leaderboard updates
+watch(
+  allSubmissions,
+  () => {
+    updateLeaderboard()
+    updateLiveLeaderboard()
+  },
+  { deep: true },
+)
 
-// ===============================================
-// LOGOUT
-// ===============================================
+// Logout
 const confirmLogout = async () => {
   isLoggingOut.value = true
   try {
@@ -253,11 +342,7 @@ const confirmLogout = async () => {
       </div>
     </header>
 
-    <!-- Main content -->
     <main class="max-w-6xl mx-auto px-4 py-8">
-      <!-- <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-
-      </div> -->
       <div class="mb-6">
         <SubmissionsGallery
           :current-game="currentGame"
@@ -272,9 +357,22 @@ const confirmLogout = async () => {
           <GameStatus :current-game="currentGame" />
           <!-- Live feed -->
           <div class="bg-white rounded-lg shadow-sm p-6">
-            <h3 class="text-lg font-semibold text-dark-gray mb-4">
-              Live Players ({{ liveFeed.length }})
-            </h3>
+            <div class="flex items-center gap-2 mb-2">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"
+                />
+              </svg>
+              <h2 class="text-lg font-semibold text-dark-gray">Live Players</h2>
+              <span class="flex items-center gap-1 ml-1">
+                <span class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                <span class="text-xs text-green-600 font-medium">Live</span>
+              </span>
+            </div>
+
             <div v-if="liveFeed.length === 0" class="text-center text-slate py-8">
               No players have joined yet.
             </div>
@@ -302,7 +400,8 @@ const confirmLogout = async () => {
 
         <!-- Right column -->
         <div class="space-y-6">
-          <Leaderboard :leaderboard="leaderboard" />
+          <!-- NEW: passing liveLeaderboard prop -->
+          <Leaderboard :leaderboard="leaderboard" :live-leaderboard="liveLeaderboard" />
           <PrizeEditorForm :current-game="currentGame" @prize-saved="loadGameData" />
         </div>
       </div>
@@ -330,7 +429,7 @@ const confirmLogout = async () => {
               :disabled="isLoggingOut"
               class="px-4 py-2 text-sm font-medium text-white rounded-md bg-primary disabled:opacity-50 cursor-pointer hover:bg-primary/90"
             >
-              {{ isLoggingOut ? 'Signing out...' : 'Sign Out' }}
+              {{ isLoggingOut ? 'Signing out...' : 'Yes, sign out' }}
             </button>
           </div>
         </div>

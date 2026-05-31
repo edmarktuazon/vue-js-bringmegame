@@ -37,6 +37,14 @@ onUnmounted(() => {
   if (unsubscribeGame) unsubscribeGame()
 })
 
+// Display label mapping
+const statusLabel = (status) => {
+  if (status === 'waiting') return 'OPEN'
+  if (status === 'active') return 'PLAYING'
+  if (status === 'ended') return 'CLOSED'
+  return status.toUpperCase()
+}
+
 const handleSubmit = async (e) => {
   e.preventDefault()
 
@@ -90,8 +98,9 @@ const handleSubmit = async (e) => {
         <div class="flex items-center flex-col px-6 pt-6">
           <img :src="BMGLogo" class="w-48 h-24.25 mb-10" alt="Bring Me Game Logo" />
           <div class="space-y-2">
+            <!-- Updated: using statusLabel() for display -->
             <p v-if="activeGame" class="text-xs text-primary font-semibold">
-              Game Status: {{ activeGame.status.toUpperCase() }}
+              Game Status: {{ statusLabel(activeGame.status) }}
             </p>
             <p class="text-sm text-dark-gray mb-2">Enter your Instagram handle to join the game.</p>
           </div>

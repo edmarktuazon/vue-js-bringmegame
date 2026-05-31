@@ -14,7 +14,6 @@ const emit = defineEmits(['update:selectedUser', 'submission-updated'])
 
 const localSelectedUser = ref(props.selectedUser)
 
-//  Modal state
 const showModal = ref(false)
 const selectedSubmission = ref(null)
 
@@ -57,14 +56,16 @@ const currentSubmissions = computed(() => {
     case 'rejected':
       subs = subs.filter((s) => s.status === 'rejected')
       break
+    case 'disqualified':
+      subs = subs.filter((s) => s.status === 'disqualified')
+      break
   }
 
-  // Sort by promptIndex ascending (1st, 2nd, 3rd)
   return subs.sort((a, b) => a.promptIndex - b.promptIndex)
 })
 
 const submissionCounts = computed(() => {
-  if (!props.currentGame?.id) return { pending: 0, approved: 0, rejected: 0 }
+  if (!props.currentGame?.id) return { pending: 0, approved: 0, rejected: 0, disqualified: 0 }
 
   const currentSubs = props.allSubmissions.filter((s) => s.gameId === props.currentGame.id)
 
@@ -72,41 +73,39 @@ const submissionCounts = computed(() => {
     pending: currentSubs.filter((s) => s.status === 'pending').length,
     approved: currentSubs.filter((s) => s.status === 'approved').length,
     rejected: currentSubs.filter((s) => s.status === 'rejected').length,
+    disqualified: currentSubs.filter((s) => s.status === 'disqualified').length,
   }
 })
 
-const isCurrentGameSubmission = (sub) => sub.gameId === props.currentGame?.id
+const isCurrentGameSubmission = (sub) => {
+  if (!props.currentGame?.id) return false
+  return sub.gameId === props.currentGame.id
+}
 
-// Open modal
 const openModal = (submission) => {
   selectedSubmission.value = submission
   showModal.value = true
-  // Prevent body scroll
   document.body.style.overflow = 'hidden'
 }
 
-// Close modal
 const closeModal = () => {
   showModal.value = false
   selectedSubmission.value = null
-  // Restore body scroll
   document.body.style.overflow = ''
 }
 
-// Close on escape key
 const handleKeydown = (e) => {
   if (e.key === 'Escape' && showModal.value) {
     closeModal()
   }
 }
 
-// Add event listener for Escape key
 if (typeof window !== 'undefined') {
   window.addEventListener('keydown', handleKeydown)
 }
 
 const handleApproveSubmission = async (submission) => {
-  if (!props.currentGame || !isCurrentGameSubmission(submission)) return
+  if (!props.currentGame?.id || !isCurrentGameSubmission(submission)) return
 
   emit('submission-updated', { submissionId: submission.id, newStatus: 'approved' })
 
@@ -118,10 +117,10 @@ const handleApproveSubmission = async (submission) => {
       auth.currentUser?.email || 'admin',
     )
 
-    // Update modal if open
     if (selectedSubmission.value?.id === submission.id) {
       selectedSubmission.value = { ...selectedSubmission.value, status: 'approved' }
     }
+    closeModal()
   } catch (error) {
     alert('Failed to approve: ' + (error.message || 'Unknown error'))
     emit('submission-updated', { submissionId: submission.id, newStatus: 'pending' })
@@ -129,7 +128,7 @@ const handleApproveSubmission = async (submission) => {
 }
 
 const handleRejectSubmission = async (submission) => {
-  if (!props.currentGame || !isCurrentGameSubmission(submission)) return
+  if (!props.currentGame?.id || !isCurrentGameSubmission(submission)) return
 
   emit('submission-updated', { submissionId: submission.id, newStatus: 'rejected' })
 
@@ -141,12 +140,35 @@ const handleRejectSubmission = async (submission) => {
       auth.currentUser?.email || 'admin',
     )
 
-    // Update modal if open
     if (selectedSubmission.value?.id === submission.id) {
       selectedSubmission.value = { ...selectedSubmission.value, status: 'rejected' }
     }
+    closeModal()
   } catch (error) {
     alert('Failed to reject: ' + (error.message || 'Unknown error'))
+    emit('submission-updated', { submissionId: submission.id, newStatus: 'pending' })
+  }
+}
+
+const handleDisqualifySubmission = async (submission) => {
+  if (!props.currentGame?.id || !isCurrentGameSubmission(submission)) return
+
+  emit('submission-updated', { submissionId: submission.id, newStatus: 'disqualified' })
+
+  try {
+    await updateSubmissionStatus(
+      props.currentGame.id,
+      submission.id,
+      'disqualified',
+      auth.currentUser?.email || 'admin',
+    )
+
+    if (selectedSubmission.value?.id === submission.id) {
+      selectedSubmission.value = { ...selectedSubmission.value, status: 'disqualified' }
+    }
+    closeModal()
+  } catch (error) {
+    alert('Failed to disqualify: ' + (error.message || 'Unknown error'))
     emit('submission-updated', { submissionId: submission.id, newStatus: 'pending' })
   }
 }
@@ -179,9 +201,6 @@ const handleRejectSubmission = async (submission) => {
         </select>
       </div>
     </div>
-
-    <p class="text-xs text-slate mb-4">Only current game submissions can be reviewed.</p>
-
     <!-- Tabs -->
     <div class="flex gap-4 border-b border-light mb-6">
       <button
@@ -216,6 +235,17 @@ const handleRejectSubmission = async (submission) => {
         "
       >
         Rejected ({{ submissionCounts.rejected }})
+      </button>
+      <button
+        class="cursor-pointer"
+        @click="activeTab = 'disqualified'"
+        :class="
+          activeTab === 'disqualified'
+            ? 'border-b-2 border-gray-800 text-gray-800 font-medium'
+            : 'text-slate'
+        "
+      >
+        Disqualified ({{ submissionCounts.disqualified }})
       </button>
     </div>
 
@@ -254,6 +284,7 @@ const handleRejectSubmission = async (submission) => {
           </p>
         </div>
 
+        <!-- Image, click to open modal -->
         <div
           @click="openModal(sub)"
           class="relative cursor-pointer group overflow-hidden rounded-md"
@@ -263,7 +294,6 @@ const handleRejectSubmission = async (submission) => {
             alt="Submission"
             class="w-full h-52 object-cover transition-transform duration-300 group-hover:scale-105"
           />
-          <!-- Hover overlay -->
           <div
             class="absolute inset-0 bg-opacity-0 group-hover:bg-opacity-30 transition-all duration-300 flex items-center justify-center"
           >
@@ -283,34 +313,19 @@ const handleRejectSubmission = async (submission) => {
           </div>
         </div>
 
+        <!-- Status badge only on card, buttons are in modal -->
         <div
-          v-if="isCurrentGameSubmission(sub) && sub.status === 'pending'"
-          class="flex gap-3 mt-4"
-        >
-          <button
-            @click="handleApproveSubmission(sub)"
-            class="flex-1 bg-green-600 text-white py-2 rounded hover:bg-green-700 cursor-pointer transition"
-          >
-            Approve
-          </button>
-          <button
-            @click="handleRejectSubmission(sub)"
-            class="flex-1 bg-red-600 text-white py-2 rounded hover:bg-red-700 cursor-pointer transition"
-          >
-            Reject
-          </button>
-        </div>
-
-        <div
-          v-else-if="isCurrentGameSubmission(sub)"
-          class="mt-4 text-center text-sm font-medium flex items-center gap-3"
+          v-if="props.currentGame && isCurrentGameSubmission(sub)"
+          class="mt-4 flex items-center gap-3"
         >
           <span class="text-sm font-medium text-slate">Status:</span>
           <span
-            class="px-3 py-1 rounded-full text-white"
+            class="px-3 py-1 rounded-full text-white text-sm"
             :class="{
+              'bg-yellow-500': sub.status === 'pending',
               'bg-green-600': sub.status === 'approved',
               'bg-red-600': sub.status === 'rejected',
+              'bg-gray-800': sub.status === 'disqualified',
             }"
           >
             {{ sub.status.charAt(0).toUpperCase() + sub.status.slice(1) }}
@@ -371,7 +386,7 @@ const handleRejectSubmission = async (submission) => {
               </p>
             </div>
 
-            <!-- Status badge -->
+            <!-- Status badge in modal -->
             <div class="flex items-center gap-3">
               <span class="text-sm font-medium text-slate">Status:</span>
               <span
@@ -380,6 +395,7 @@ const handleRejectSubmission = async (submission) => {
                   'bg-yellow-500': selectedSubmission.status === 'pending',
                   'bg-green-600': selectedSubmission.status === 'approved',
                   'bg-red-600': selectedSubmission.status === 'rejected',
+                  'bg-gray-800': selectedSubmission.status === 'disqualified',
                 }"
               >
                 {{
@@ -389,25 +405,56 @@ const handleRejectSubmission = async (submission) => {
               </span>
             </div>
 
-            <!-- Action buttons -->
+            <!-- Action buttons, only shown in modal for pending submissions -->
             <div
               v-if="
+                props.currentGame &&
                 isCurrentGameSubmission(selectedSubmission) &&
                 selectedSubmission.status === 'pending'
               "
               class="flex gap-4 pt-4 border-t border-light"
             >
+              <!-- Approve: Tick -->
               <button
                 @click="handleApproveSubmission(selectedSubmission)"
-                class="flex-1 bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 cursor-pointer transition font-medium text-lg"
+                title="Approve"
+                class="flex-1 flex items-center justify-center bg-green-500 text-white py-4 rounded-xl hover:bg-green-600 cursor-pointer transition"
               >
-                Approve
+                <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="3"
+                    d="M5 13l4 4L19 7"
+                  />
+                </svg>
               </button>
+
+              <!-- Reject: X -->
               <button
                 @click="handleRejectSubmission(selectedSubmission)"
-                class="flex-1 bg-red-600 text-white py-3 rounded-lg hover:bg-red-700 cursor-pointer transition font-medium text-lg"
+                title="Reject"
+                class="flex-1 flex items-center justify-center bg-red-500 text-white py-4 rounded-xl hover:bg-red-600 cursor-pointer transition"
               >
-                Reject
+                <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="3"
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
+              </button>
+
+              <!-- Disqualify: Flag -->
+              <button
+                @click="handleDisqualifySubmission(selectedSubmission)"
+                title="Disqualify"
+                class="flex items-center justify-center bg-gray-700 text-white py-4 px-6 rounded-xl hover:bg-gray-800 cursor-pointer transition"
+              >
+                <svg class="w-8 h-8" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M4 21V4.5L5 4l7 3 7-3v11l-7 3-7-3v6H4z" />
+                </svg>
               </button>
             </div>
           </div>

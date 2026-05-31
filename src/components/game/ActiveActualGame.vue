@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import ConfettiCompletion from './ConfettiCompletion.vue'
 
 const props = defineProps({
@@ -15,6 +15,20 @@ const emit = defineEmits(['photo-select'])
 const isCompleted = computed(() => {
   return props.nextPromptIndex === null
 })
+
+// Show Example modal
+const showExample = ref(false)
+const examplePhoto = ref(null)
+
+const openExample = () => {
+  examplePhoto.value = props.game?.promptExampleUrls?.[props.nextPromptIndex]
+  showExample.value = true
+}
+
+const closeExample = () => {
+  showExample.value = false
+  examplePhoto.value = null
+}
 </script>
 
 <template>
@@ -105,6 +119,17 @@ const isCompleted = computed(() => {
             @change="(e) => emit('photo-select', nextPromptIndex, e)"
           />
         </label>
+
+        <!-- Show Example button — only shows if admin uploaded a reference photo -->
+        <div class="mt-6">
+          <button
+            v-if="props.game?.promptExampleUrls?.[nextPromptIndex]"
+            @click="openExample"
+            class="w-full py-6 border-2 border-primary border-dashed text-2xl text-primary font-semibold rounded-xl hover:bg-primary/10 transition cursor-pointer"
+          >
+            Show Example
+          </button>
+        </div>
       </div>
     </div>
 
@@ -115,5 +140,56 @@ const isCompleted = computed(() => {
       </p>
       <p class="text-dark-gray">Your submission is now under review. Good luck!</p>
     </div>
+
+    <!-- Show Example Modal -->
+    <Teleport to="body">
+      <Transition name="fade">
+        <div
+          v-if="showExample && examplePhoto"
+          class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-4"
+          @click.self="closeExample"
+        >
+          <div class="bg-white rounded-md shadow-2xl max-w-xl w-full overflow-hidden">
+            <!-- Header -->
+            <div class="flex justify-between items-center px-5 py-4">
+              <div>&nbsp;</div>
+              <button
+                @click="closeExample"
+                class="text-dark-gray hover:text-primary transition cursor-pointer"
+              >
+                <svg class="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
+              </button>
+            </div>
+
+            <!-- Image -->
+            <div class="p-4">
+              <img
+                :src="examplePhoto"
+                alt="Example"
+                class="w-full rounded-xl object-contain max-h-[60vh]"
+              />
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
+
+<style scoped>
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+</style>

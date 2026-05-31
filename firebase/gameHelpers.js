@@ -17,18 +17,16 @@ import {
 } from 'firebase/firestore'
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage'
 
-// ============================================
-// GAME FUNCTIONS
-// ============================================
+// Game functions
 
 export const submitPhoto = async (gameId, userId, instagramHandle, promptIndex, file) => {
   try {
     if (!file) throw new Error('No file selected')
 
-    // 1. INSTANT preview URL (synchronous, no delay)
+    // Prev URL
     const previewUrl = URL.createObjectURL(file)
 
-    // 2. Compress image (this happens in background, preview already shown)
+    // Compress Image
     const options = {
       maxSizeMB: 0.3,
       maxWidthOrHeight: 800,
@@ -39,7 +37,7 @@ export const submitPhoto = async (gameId, userId, instagramHandle, promptIndex, 
 
     const compressedFile = await imageCompression(file, options)
 
-    // 3. Upload compressed file
+    // Upload compressed file
     const timestamp = Date.now()
     const filePath = `submissions/${gameId}/${userId}/${promptIndex}_${timestamp}.jpg`
     const imgRef = storageRef(storage, filePath)
@@ -51,7 +49,7 @@ export const submitPhoto = async (gameId, userId, instagramHandle, promptIndex, 
 
     const photoUrl = await getDownloadURL(imgRef)
 
-    // 4. Save to Firestore
+    // Save to Firestore
     const submissionId = `${userId}_${promptIndex}`
     const submissionDocRef = doc(db, 'games', gameId, 'submissions', submissionId)
 
@@ -68,10 +66,10 @@ export const submitPhoto = async (gameId, userId, instagramHandle, promptIndex, 
 
     await setDoc(submissionDocRef, submissionData, { merge: true })
 
-    // Clean up preview URL after success (but preview already shown)
+    // Clean up preview URL after success
     setTimeout(() => URL.revokeObjectURL(previewUrl), 2000)
 
-    return { photoUrl, previewUrl } // return both for flexibility
+    return { photoUrl, previewUrl }
   } catch (error) {
     console.error('❌ Upload failed:', error)
     throw error
@@ -94,7 +92,7 @@ export const getActiveGame = async () => {
   }
 }
 
-export const createGame = async (prompts, createdByEmail) => {
+export const createGame = async (prompts, createdByEmail, promptExampleFiles = []) => {
   if (!prompts || prompts.length !== 3 || prompts.some((p) => !p.trim())) {
     throw new Error('Exactly 3 non-empty prompts are required')
   }
@@ -110,8 +108,22 @@ export const createGame = async (prompts, createdByEmail) => {
     })
 
     const newGameRef = doc(collection(db, 'games'))
+
+    // Upload example photos if provided
+    const promptExampleUrls = ['', '', '']
+    for (let i = 0; i < 3; i++) {
+      const file = promptExampleFiles[i]
+      if (file) {
+        const filePath = `games/${newGameRef.id}/examples/prompt_${i}.jpg`
+        const imgRef = storageRef(storage, filePath)
+        await uploadBytes(imgRef, file, { contentType: 'image/jpeg' })
+        promptExampleUrls[i] = await getDownloadURL(imgRef)
+      }
+    }
+
     const newGameData = {
       prompts: prompts.map((p) => p.trim()),
+      promptExampleUrls,
       status: 'waiting',
       isActive: true,
       createdBy: createdByEmail,
@@ -178,9 +190,7 @@ export const updatePrize = async (gameId, description, logoFile) => {
   }
 }
 
-// ============================================
-// USER FUNCTIONS
-// ============================================
+// User functions
 
 export const createUser = async (instagramHandle, currentGameId = null) => {
   try {
@@ -231,9 +241,7 @@ export const updateUserCurrentGame = async (userId, gameId) => {
   }
 }
 
-// ============================================
-// SUBMISSION FUNCTIONS
-// ============================================
+// Submission functions
 
 export const getUserSubmissions = async (gameId, userId) => {
   try {
@@ -352,9 +360,7 @@ export const updateSubmissionStatus = async (gameId, submissionId, status, admin
   }
 }
 
-// ============================================
-// CENTRAL TIMER - LEADERBOARD & COMPLETION
-// ============================================
+// Central timer
 
 export const getUserCompletionTime = async (gameId, userId) => {
   try {
@@ -493,9 +499,7 @@ export const formatDetailedTime = (ms) => {
   return `${minPart}${secPart}${msPart}`.trim()
 }
 
-// ============================================
-// LIVE LEADERBOARD
-// ============================================
+// live leaderboard
 
 export const getLiveLeaderboard = async (gameId) => {
   try {
