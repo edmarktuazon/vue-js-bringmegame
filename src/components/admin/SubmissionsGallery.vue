@@ -202,7 +202,7 @@ const handleDisqualifySubmission = async (submission) => {
       </div>
     </div>
     <!-- Tabs -->
-    <div class="flex gap-4 border-b border-light mb-6">
+    <div class="flex flex-wrap gap-4 border-b border-light mb-6">
       <button
         class="cursor-pointer"
         @click="activeTab = 'pending'"
