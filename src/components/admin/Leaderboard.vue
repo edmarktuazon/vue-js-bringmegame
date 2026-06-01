@@ -33,53 +33,52 @@ defineProps({
           :key="entry.userId"
           class="flex items-center justify-between p-4 rounded-lg transition-all border"
           :class="{
-            'bg-yellow-50 border-yellow-400 shadow-xl': entry.rank === 1,
-            'bg-gray-100 border-gray-400 shadow-lg': entry.rank === 2,
-            'bg-orange-50 border-orange-500 shadow-lg': entry.rank === 3,
-            'bg-blue-50 border-blue-300 shadow': entry.rank >= 4,
+            'bg-yellow-50 border-yellow-400 shadow-xl': entry.rank === 1 && !entry.isDisqualified,
+            'bg-gray-100 border-gray-400 shadow-lg': entry.rank === 2 && !entry.isDisqualified,
+            'bg-orange-50 border-orange-500 shadow-lg': entry.rank === 3 && !entry.isDisqualified,
+            'bg-blue-50 border-blue-300 shadow': entry.rank >= 4 && !entry.isDisqualified,
+            'bg-gray-100 border-gray-300': entry.isDisqualified,
           }"
         >
           <div class="flex items-center gap-4">
             <div class="shrink-0">
-              <!-- 1st -->
               <div
-                v-if="entry.rank === 1"
+                v-if="entry.rank === 1 && !entry.isDisqualified"
                 class="w-14 h-14 bg-yellow-500 rounded-full flex items-center justify-center text-white font-bold text-2xl shadow-xl"
               >
                 1<sup>st</sup>
               </div>
-              <!-- 2nd -->
               <div
-                v-else-if="entry.rank === 2"
+                v-else-if="entry.rank === 2 && !entry.isDisqualified"
                 class="w-12 h-12 bg-gray-500 rounded-full flex items-center justify-center text-white font-bold text-xl shadow-lg"
               >
                 2<sup>nd</sup>
               </div>
-              <!-- 3rd -->
               <div
-                v-else-if="entry.rank === 3"
+                v-else-if="entry.rank === 3 && !entry.isDisqualified"
                 class="w-12 h-12 bg-orange-600 rounded-full flex items-center justify-center text-white font-bold text-xl shadow-lg"
               >
                 3<sup>rd</sup>
               </div>
               <div
-                v-else
+                v-else-if="!entry.isDisqualified"
                 class="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold text-xl shadow-lg"
               >
                 {{ entry.rank }}<sup>th</sup>
               </div>
+              <div
+                v-else
+                class="w-12 h-12 bg-gray-400 rounded-full flex items-center justify-center text-white font-bold text-xl shadow-lg"
+              >
+                {{ entry.rank }}<sup>{{ ['st', 'nd', 'rd'][entry.rank - 1] || 'th' }}</sup>
+              </div>
             </div>
-            <!-- ig username -->
             <h3 class="font-semibold text-dark-gray break-all">
               {{ entry.instagramHandle }}
             </h3>
           </div>
-          <!-- completion time -->
           <div class="text-right">
-            <p
-              class="text-lg font-bold"
-              :class="entry.isDisqualified ? 'text-gray-400 line-through' : 'text-dark-gray'"
-            >
+            <p v-if="!entry.isDisqualified" class="text-lg font-bold text-dark-gray">
               {{ entry.formattedTime }}
             </p>
             <p
@@ -93,10 +92,10 @@ defineProps({
       </div>
     </div>
 
-    <!-- Live leaderboard -->
+    <!-- Live Leaderboard -->
     <div class="bg-white rounded-lg shadow-sm p-6">
       <div class="flex items-center gap-2 mb-2">
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg class="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path
             stroke-linecap="round"
             stroke-linejoin="round"
@@ -116,42 +115,62 @@ defineProps({
         No players ranked yet.
       </div>
 
-      <div v-else class="space-y-2 max-h-96 overflow-y-auto">
+      <div v-else class="space-y-3 max-h-96 overflow-y-auto">
         <div
           v-for="entry in liveLeaderboard"
           :key="entry.id"
-          class="flex items-center justify-between px-4 py-3 rounded-lg border transition-all"
+          class="flex items-center justify-between p-4 rounded-lg border transition-all"
           :class="{
-            'bg-yellow-50 border-yellow-400': entry.rank === 1 && !entry.isDisqualified,
-            'bg-gray-50 border-gray-400': entry.rank === 2 && !entry.isDisqualified,
-            'bg-orange-50 border-orange-400': entry.rank === 3 && !entry.isDisqualified,
-            'bg-purple-50 border-purple-300': entry.rank >= 4 && !entry.isDisqualified,
-            'bg-gray-100 border-gray-300 opacity-60': entry.isDisqualified,
+            'bg-yellow-50 border-yellow-400 shadow-xl': entry.rank === 1 && !entry.isDisqualified,
+            'bg-gray-100 border-gray-400 shadow-lg': entry.rank === 2 && !entry.isDisqualified,
+            'bg-orange-50 border-orange-500 shadow-lg': entry.rank === 3 && !entry.isDisqualified,
+            'bg-blue-50 border-blue-300 shadow': entry.rank >= 4 && !entry.isDisqualified,
+            'bg-gray-100 border-gray-300': entry.isDisqualified,
           }"
         >
-          <div class="flex items-center gap-3">
-            <div
-              class="w-9 h-9 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0"
-              :class="{
-                'bg-yellow-500': entry.rank === 1 && !entry.isDisqualified,
-                'bg-gray-500': entry.rank === 2 && !entry.isDisqualified,
-                'bg-orange-500': entry.rank === 3 && !entry.isDisqualified,
-                'bg-purple-600': entry.rank >= 4 && !entry.isDisqualified,
-                'bg-gray-400': entry.isDisqualified,
-              }"
-            >
-              {{ entry.rank }}
+          <div class="flex items-center gap-4">
+            <div class="shrink-0">
+              <div
+                v-if="entry.rank === 1 && !entry.isDisqualified"
+                class="w-14 h-14 bg-yellow-500 rounded-full flex items-center justify-center text-white font-bold text-2xl shadow-xl"
+              >
+                1<sup>st</sup>
+              </div>
+              <div
+                v-else-if="entry.rank === 2 && !entry.isDisqualified"
+                class="w-12 h-12 bg-gray-500 rounded-full flex items-center justify-center text-white font-bold text-xl shadow-lg"
+              >
+                2<sup>nd</sup>
+              </div>
+              <div
+                v-else-if="entry.rank === 3 && !entry.isDisqualified"
+                class="w-12 h-12 bg-orange-600 rounded-full flex items-center justify-center text-white font-bold text-xl shadow-lg"
+              >
+                3<sup>rd</sup>
+              </div>
+              <div
+                v-else-if="!entry.isDisqualified"
+                class="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold text-xl shadow-lg"
+              >
+                {{ entry.rank }}<sup>th</sup>
+              </div>
+              <div
+                v-else
+                class="w-12 h-12 bg-gray-400 rounded-full flex items-center justify-center text-white font-bold text-xl shadow-lg"
+              >
+                {{ entry.rank }}<sup>{{ ['st', 'nd', 'rd'][entry.rank - 1] || 'th' }}</sup>
+              </div>
             </div>
             <span
-              class="font-medium text-sm"
-              :class="entry.isDisqualified ? 'text-gray-400 line-through' : 'text-dark-gray'"
+              class="font-semibold break-all"
+              :class="entry.isDisqualified ? 'text-gray-400' : 'text-dark-gray'"
             >
               {{ entry.handle }}
             </span>
           </div>
           <div class="text-right">
             <template v-if="entry.isDisqualified">
-              <span class="text-xs font-semibold text-red-500">Disqualified</span>
+              <p class="text-xs text-red-500 font-semibold">Disqualified</p>
             </template>
             <template v-else>
               <p class="text-sm font-bold text-dark-gray">{{ entry.approvedCount }} approved</p>
