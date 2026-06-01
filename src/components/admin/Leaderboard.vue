@@ -50,7 +50,7 @@ defineProps({
               </div>
               <div
                 v-else-if="entry.rank === 2 && !entry.isDisqualified"
-                class="w-12 h-12 bg-gray-500 rounded-full flex items-center justify-center text-white font-bold text-xl shadow-lg"
+                class="w-12 h-12 bg-gray-400 rounded-full flex items-center justify-center text-white font-bold text-xl shadow-lg"
               >
                 2<sup>nd</sup>
               </div>
@@ -73,9 +73,12 @@ defineProps({
                 {{ entry.rank }}<sup>{{ ['st', 'nd', 'rd'][entry.rank - 1] || 'th' }}</sup>
               </div>
             </div>
-            <h3 class="font-semibold text-dark-gray break-all">
+            <span
+              class="font-semibold break-all"
+              :class="entry.isDisqualified ? 'text-gray-400' : 'text-dark-gray'"
+            >
               {{ entry.instagramHandle }}
-            </h3>
+            </span>
           </div>
           <div class="text-right">
             <p v-if="!entry.isDisqualified" class="text-lg font-bold text-dark-gray">
@@ -95,7 +98,7 @@ defineProps({
     <!-- Live Leaderboard -->
     <div class="bg-white rounded-lg shadow-sm p-6">
       <div class="flex items-center gap-2 mb-2">
-        <svg class="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path
             stroke-linecap="round"
             stroke-linejoin="round"
@@ -103,7 +106,7 @@ defineProps({
             d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
           />
         </svg>
-        <h2 class="text-lg font-semibold text-dark-gray">Live Leaderboard</h2>
+        <h2 class="text-lg font-semibold text-dark-gray">Leaderboard</h2>
         <span class="flex items-center gap-1 ml-1">
           <span class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
           <span class="text-xs text-green-600 font-medium">Live</span>
@@ -138,7 +141,7 @@ defineProps({
               </div>
               <div
                 v-else-if="entry.rank === 2 && !entry.isDisqualified"
-                class="w-12 h-12 bg-gray-500 rounded-full flex items-center justify-center text-white font-bold text-xl shadow-lg"
+                class="w-12 h-12 bg-gray-300 rounded-full flex items-center justify-center text-white font-bold text-xl shadow-lg"
               >
                 2<sup>nd</sup>
               </div>
@@ -173,7 +176,7 @@ defineProps({
               <p class="text-xs text-red-500 font-semibold">Disqualified</p>
             </template>
             <template v-else>
-              <p class="text-sm font-bold text-dark-gray">{{ entry.approvedCount }} approved</p>
+              <p class="text-lg font-bold text-dark-gray">{{ entry.approvedCount }} approved</p>
             </template>
           </div>
         </div>
