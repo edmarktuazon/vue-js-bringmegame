@@ -22,7 +22,7 @@ const router = useRouter()
 const currentGame = ref(null)
 const allSubmissions = ref([])
 const leaderboard = ref([])
-const liveLeaderboard = ref([]) // NEW
+const liveLeaderboard = ref([])
 const users = ref(['All Users'])
 const selectedUser = ref('All Users')
 const loadingGame = ref(false)
@@ -400,7 +400,6 @@ const confirmLogout = async () => {
 
         <!-- Right column -->
         <div class="space-y-6">
-          <!-- NEW: passing liveLeaderboard prop -->
           <Leaderboard :leaderboard="leaderboard" :live-leaderboard="liveLeaderboard" />
           <PrizeEditorForm :current-game="currentGame" @prize-saved="loadGameData" />
         </div>

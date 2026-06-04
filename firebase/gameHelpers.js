@@ -163,6 +163,7 @@ export const updateGameStatus = async (gameId, newStatus) => {
     await updateDoc(gameRef, {
       status: newStatus,
       startedAt: serverTimestamp(),
+      countdownStartedAt: Date.now(),
     })
   } else {
     await updateDoc(gameRef, { status: newStatus })

@@ -20,6 +20,24 @@ const isLoggingOut = ref(false)
 const showRankModal = ref(false)
 const userRank = ref(null)
 
+// Photo modal
+const showPhotoModal = ref(false)
+const selectedPhoto = ref(null)
+const selectedPromptIndex = ref(null)
+
+const openPhotoModal = (photoUrl, promptIndex) => {
+  if (!photoUrl) return
+  selectedPhoto.value = photoUrl
+  selectedPromptIndex.value = promptIndex
+  showPhotoModal.value = true
+}
+
+const closePhotoModal = () => {
+  showPhotoModal.value = false
+  selectedPhoto.value = null
+  selectedPromptIndex.value = null
+}
+
 const confirmExit = () => {
   isLoggingOut.value = true
   localStorage.removeItem('bmg_user')
@@ -39,7 +57,6 @@ onMounted(async () => {
 
   await loadData()
 
-  // Real time listener
   unsub = onSnapshot(collection(db, 'games', game.value.id, 'submissions'), (snapshot) =>
     processSubmissions(snapshot),
   )
@@ -64,14 +81,12 @@ const setupGameListener = () => {
   })
 }
 
-// Initial load using getDocs
 const loadData = async () => {
   if (!game.value?.id) return
   const snap = await getDocs(collection(db, 'games', game.value.id, 'submissions'))
   processSubmissions(snap)
 }
 
-// Core logic, used by both getDocs (initial) and onSnapshot (real-time)
 const processSubmissions = (snap) => {
   if (!game.value?.id) return
 
@@ -88,6 +103,7 @@ const processSubmissions = (snap) => {
         approvedCount: 0,
         lastTime: 0,
         statuses: [null, null, null],
+        photoUrls: [null, null, null], // NEW
         count: 0,
         isDisqualified: false,
       })
@@ -96,6 +112,7 @@ const processSubmissions = (snap) => {
     const u = userMap.get(data.userId)
     u.count++
     u.statuses[data.promptIndex] = data.status
+    u.photoUrls[data.promptIndex] = data.photoUrl || null // NEW
 
     if (data.uploadedAt?.toMillis() > u.lastTime) {
       u.lastTime = data.uploadedAt.toMillis()
@@ -105,7 +122,6 @@ const processSubmissions = (snap) => {
       u.approvedCount++
     }
 
-    // Flag entire player as DQ if ANY submission is disqualified
     if (data.status === 'disqualified') {
       u.isDisqualified = true
     }
@@ -115,7 +131,6 @@ const processSubmissions = (snap) => {
   userMap.forEach((u, id) => {
     if (u.count !== 3) return
 
-    // DQ player, force score 0 and push to bottom
     if (u.isDisqualified) {
       list.push({
         id,
@@ -124,6 +139,7 @@ const processSubmissions = (snap) => {
         timeMs: Infinity,
         timeStr: '—',
         statuses: u.statuses,
+        photoUrls: u.photoUrls,
         isDisqualified: true,
       })
       return
@@ -137,6 +153,7 @@ const processSubmissions = (snap) => {
         approvedCount: u.approvedCount || 0,
         timeStr: '—',
         statuses: u.statuses,
+        photoUrls: u.photoUrls,
         isDisqualified: false,
       })
       return
@@ -150,11 +167,11 @@ const processSubmissions = (snap) => {
       timeMs,
       timeStr: formatDetailedTime(timeMs),
       statuses: u.statuses,
+      photoUrls: u.photoUrls,
       isDisqualified: false,
     })
   })
 
-  // DQ players always at the bottom
   list.sort((a, b) => {
     if (a.isDisqualified && !b.isDisqualified) return 1
     if (!a.isDisqualified && b.isDisqualified) return -1
@@ -205,7 +222,6 @@ const playerStatus = computed(() => {
   }
 })
 
-// Disqualified shows as plain gray. DQ status is hidden from public
 const statusBg = (s) =>
   s === 'approved' ? 'bg-green-500' : s === 'rejected' ? 'bg-red-500' : 'bg-gray-300'
 
@@ -233,7 +249,6 @@ const rankBg = (r) => {
   return 'flex items-center justify-between rounded-lg transition-all border bg-purple-50 border-purple-400 shadow-xl'
 }
 
-// formatted time string
 function formatDetailedTime(ms) {
   if (typeof ms !== 'number' || ms < 0) return '—'
   const totalSeconds = Math.floor(ms / 1000)
@@ -294,11 +309,23 @@ function formatDetailedTime(ms) {
             </div>
           </div>
 
+          <!-- Status squares, clickable if has photo -->
           <div class="grid grid-cols-3 gap-4">
             <div v-for="i in [0, 1, 2]" :key="i" class="flex justify-center">
               <div
-                class="w-full h-auto rounded-md flex items-center justify-center text-white font-bold text-xs md:text-sm shadow-md"
-                :class="statusBg(entry.statuses[i])"
+                class="w-full h-auto rounded-md flex items-center justify-center text-white font-bold text-xs md:text-sm shadow-md transition-all"
+                :class="[
+                  statusBg(entry.statuses[i]),
+                  (entry.statuses[i] === 'approved' || entry.statuses[i] === 'rejected') &&
+                  entry.photoUrls?.[i]
+                    ? 'cursor-pointer hover:opacity-80 hover:scale-105'
+                    : '',
+                ]"
+                @click="
+                  entry.statuses[i] === 'approved' || entry.statuses[i] === 'rejected'
+                    ? openPhotoModal(entry.photoUrls?.[i], i)
+                    : null
+                "
               ></div>
             </div>
           </div>
@@ -314,6 +341,48 @@ function formatDetailedTime(ms) {
         </div>
       </div>
     </div>
+
+    <!-- Photo Modal -->
+    <Teleport to="body">
+      <Transition name="fade">
+        <div
+          v-if="showPhotoModal && selectedPhoto"
+          class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-4"
+          @click.self="closePhotoModal"
+        >
+          <div class="bg-white rounded-md shadow-2xl max-w-xl w-full overflow-hidden">
+            <!-- Header -->
+            <div class="flex justify-between items-center px-5 py-4">
+              <p class="text-sm font-semibold text-dark-gray">
+                {{ game?.prompts?.[selectedPromptIndex] || `Prompt ${selectedPromptIndex + 1}` }}
+              </p>
+              <button
+                @click="closePhotoModal"
+                class="text-dark-gray hover:text-primary transition cursor-pointer"
+              >
+                <svg class="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
+              </button>
+            </div>
+
+            <!-- Image -->
+            <div class="p-4">
+              <img
+                :src="selectedPhoto"
+                alt="Submission"
+                class="w-full rounded-xl object-contain max-h-[60vh]"
+              />
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
 
     <GameEndModal
       v-model="showRankModal"

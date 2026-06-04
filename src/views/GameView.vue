@@ -47,6 +47,40 @@ let unsubscribeGame = null
 let unsubscribeFeed = null
 let unsubscribeSubmissions = null
 
+const getRemaining = () => {
+  const countdownStartMs =
+    typeof game.value?.countdownStartedAt === 'number'
+      ? game.value.countdownStartedAt
+      : game.value?.countdownStartedAt?.toMillis?.() || 0
+
+  if (!countdownStartMs) return 0
+  const elapsed = Math.max(0, Date.now() - countdownStartMs)
+  const remaining = Math.round((30000 - elapsed) / 1000)
+  return Math.min(30, Math.max(0, remaining))
+}
+
+const startCountdown = () => {
+  if (countdownInterval.value) {
+    clearInterval(countdownInterval.value)
+    countdownInterval.value = null
+  }
+
+  showCountdown.value = true
+
+  countdownInterval.value = setInterval(() => {
+    const remaining = getRemaining()
+    countdown.value = remaining
+
+    if (remaining <= 0) {
+      clearInterval(countdownInterval.value)
+      countdownInterval.value = null
+      showCountdown.value = false
+    }
+  }, 1000)
+
+  countdown.value = getRemaining()
+}
+
 onMounted(async () => {
   const userStr = localStorage.getItem('bmg_user')
   if (!userStr) {
@@ -73,10 +107,9 @@ onMounted(async () => {
     setupListeners()
 
     if (game.value.status === 'active') {
-      const startedMs = game.value.startedAt?.toMillis() || 0
-      const elapsed = Date.now() - startedMs
-      if (elapsed < 30000) {
-        startCountdown(30 - Math.floor(elapsed / 1000))
+      const remaining = getRemaining()
+      if (remaining > 0) {
+        startCountdown()
       }
     }
 
@@ -131,28 +164,31 @@ const setupListeners = () => {
   }
 }
 
-const startCountdown = (initial = 30) => {
-  showCountdown.value = true
-  countdown.value = initial
-
-  countdownInterval.value = setInterval(() => {
-    countdown.value--
-    if (countdown.value <= 0) {
-      clearInterval(countdownInterval.value)
-      showCountdown.value = false
-    }
-  }, 1000)
-}
-
 watch(
   () => game.value?.status,
   (newVal, oldVal) => {
     if (newVal === 'active' && oldVal !== 'active') {
-      startCountdown()
+      const remaining = getRemaining()
+      if (remaining > 0) {
+        startCountdown()
+      } else {
+        showCountdown.value = false
+      }
     }
   },
 )
 
+watch(
+  () => game.value?.countdownStartedAt,
+  (newVal) => {
+    if (newVal && game.value?.status === 'active') {
+      const remaining = getRemaining()
+      if (remaining > 0) {
+        startCountdown()
+      }
+    }
+  },
+)
 const nextPromptIndex = computed(() => {
   if (!game.value?.prompts) return 0
   for (let i = 0; i < game.value.prompts.length; i++) {
