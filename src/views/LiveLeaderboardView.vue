@@ -103,7 +103,7 @@ const processSubmissions = (snap) => {
         approvedCount: 0,
         lastTime: 0,
         statuses: [null, null, null],
-        photoUrls: [null, null, null], // NEW
+        photoUrls: [null, null, null],
         count: 0,
         isDisqualified: false,
       })
@@ -112,7 +112,7 @@ const processSubmissions = (snap) => {
     const u = userMap.get(data.userId)
     u.count++
     u.statuses[data.promptIndex] = data.status
-    u.photoUrls[data.promptIndex] = data.photoUrl || null // NEW
+    u.photoUrls[data.promptIndex] = data.photoUrl || null
 
     if (data.uploadedAt?.toMillis() > u.lastTime) {
       u.lastTime = data.uploadedAt.toMillis()
@@ -223,7 +223,13 @@ const playerStatus = computed(() => {
 })
 
 const statusBg = (s) =>
-  s === 'approved' ? 'bg-green-500' : s === 'rejected' ? 'bg-red-500' : 'bg-gray-300'
+  s === 'approved'
+    ? 'bg-green-500'
+    : s === 'rejected'
+      ? 'bg-red-500'
+      : s === 'disqualified'
+        ? 'bg-gray-950'
+        : 'bg-gray-300'
 
 const getRankColor = (rank) => {
   if (rank === 1) return 'text-yellow-600'
@@ -291,7 +297,12 @@ function formatDetailedTime(ms) {
       <div v-if="loading" class="text-center py-20 text-slate">Loading, please wait patiently</div>
 
       <div v-else class="space-y-4">
-        <div v-for="entry in rankedPlayers" :key="entry.id" class="grid grid-cols-2 gap-4">
+        <!-- CHANGE 2: Top 5 lang mag-show -->
+        <div
+          v-for="entry in rankedPlayers.slice(0, 5)"
+          :key="entry.id"
+          class="grid grid-cols-2 gap-4"
+        >
           <div class="flex items-center p-3 md:p-4 rounded-md" :class="rankBg(entry.rank)">
             <h6
               class="w-8 h-8 md:w-14 md:h-14 rounded-full flex items-center justify-center text-white font-bold text-sm md:text-2xl mr-2 shadow-md"
