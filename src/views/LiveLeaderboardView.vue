@@ -297,9 +297,8 @@ function formatDetailedTime(ms) {
       <div v-if="loading" class="text-center py-20 text-slate">Loading, please wait patiently</div>
 
       <div v-else class="space-y-4">
-        <!-- CHANGE 2: Top 5 lang mag-show -->
         <div
-          v-for="entry in rankedPlayers.slice(0, 5)"
+          v-for="entry in rankedPlayers.slice(0, 10)"
           :key="entry.id"
           class="grid grid-cols-2 gap-4"
         >
