@@ -297,46 +297,48 @@ function formatDetailedTime(ms) {
       <div v-if="loading" class="text-center py-20 text-slate">Loading, please wait patiently</div>
 
       <div v-else class="space-y-4">
-        <div
-          v-for="entry in rankedPlayers.slice(0, 10)"
-          :key="entry.id"
-          class="grid grid-cols-2 gap-4"
-        >
-          <div class="flex items-center p-3 md:p-4 rounded-md" :class="rankBg(entry.rank)">
-            <h6
-              class="w-8 h-8 md:w-14 md:h-14 rounded-full flex items-center justify-center text-white font-bold text-sm md:text-2xl mr-2 shadow-md"
-              :class="rankBadge(entry.rank)"
+        <div class="max-h-[47vh] h-130 sm:h-[63vh] sm:max-h-130 overflow-y-auto pr-2 space-y-4">
+          <div v-for="entry in rankedPlayers" :key="entry.id" class="grid grid-cols-2 gap-4">
+            <div
+              class="flex items-center p-3 md:p-4 rounded-md max-h-22.5 h-full"
+              :class="rankBg(entry.rank)"
             >
-              {{ entry.rank }}<sup>{{ ['st', 'nd', 'rd'][entry.rank - 1] || 'th' }}</sup>
-            </h6>
-            <div class="flex-1 min-w-0">
-              <div
-                class="font-semibold text-sm md:text-xl font-montserrat max-w-[23ch] sm:max-w-full truncate"
-                :class="getRankColor(entry.rank)"
+              <h6
+                class="w-8 h-8 md:w-14 md:h-14 rounded-full flex items-center justify-center text-white font-bold text-sm md:text-2xl mr-2 shadow-md"
+                :class="rankBadge(entry.rank)"
               >
-                {{ entry.handle }}
+                {{ entry.rank }}<sup>{{ ['st', 'nd', 'rd'][entry.rank - 1] || 'th' }}</sup>
+              </h6>
+
+              <div class="flex-1 min-w-0">
+                <div
+                  class="font-semibold text-sm md:text-xl font-montserrat max-w-[23ch] sm:max-w-full truncate"
+                  :class="getRankColor(entry.rank)"
+                >
+                  {{ entry.handle }}
+                </div>
               </div>
             </div>
-          </div>
 
-          <!-- Status squares, clickable if has photo -->
-          <div class="grid grid-cols-3 gap-4">
-            <div v-for="i in [0, 1, 2]" :key="i" class="flex justify-center">
-              <div
-                class="w-full h-auto rounded-md flex items-center justify-center text-white font-bold text-xs md:text-sm shadow-md transition-all"
-                :class="[
-                  statusBg(entry.statuses[i]),
-                  (entry.statuses[i] === 'approved' || entry.statuses[i] === 'rejected') &&
-                  entry.photoUrls?.[i]
-                    ? 'cursor-pointer hover:opacity-80 hover:scale-105'
-                    : '',
-                ]"
-                @click="
-                  entry.statuses[i] === 'approved' || entry.statuses[i] === 'rejected'
-                    ? openPhotoModal(entry.photoUrls?.[i], i)
-                    : null
-                "
-              ></div>
+            <!-- Status squares -->
+            <div class="grid grid-cols-3 gap-4">
+              <div v-for="i in [0, 1, 2]" :key="i" class="flex justify-center">
+                <div
+                  class="w-full max-h-22.5 h-full aspect-square rounded-md flex items-center justify-center text-white font-bold text-xs md:text-sm shadow-md transition-all"
+                  :class="[
+                    statusBg(entry.statuses[i]),
+                    (entry.statuses[i] === 'approved' || entry.statuses[i] === 'rejected') &&
+                    entry.photoUrls?.[i]
+                      ? 'cursor-pointer hover:opacity-80 hover:scale-105'
+                      : '',
+                  ]"
+                  @click="
+                    entry.statuses[i] === 'approved' || entry.statuses[i] === 'rejected'
+                      ? openPhotoModal(entry.photoUrls?.[i], i)
+                      : null
+                  "
+                ></div>
+              </div>
             </div>
           </div>
         </div>
