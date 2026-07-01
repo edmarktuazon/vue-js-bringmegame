@@ -286,7 +286,7 @@ const pad = (n) => String(n).padStart(2, '0')
       </div>
 
       <!-- How It Works -->
-      <div class="mt-6 bg-white rounded-lg shadow-xl w-full px-6 py-6">
+      <!-- <div class="mt-6 bg-white rounded-lg shadow-xl w-full px-6 py-6">
         <div class="flex items-center justify-center gap-2 mb-6">
           <div class="h-px bg-gray-200 flex-1"></div>
           <p class="text-xs font-bold text-dark-gray tracking-widest uppercase">How It Works</p>
@@ -355,7 +355,7 @@ const pad = (n) => String(n).padStart(2, '0')
             <p class="text-xs font-bold text-dark-gray uppercase leading-tight">Win Real Prizes</p>
           </div>
         </div>
-      </div>
+      </div> -->
     </div>
   </main>
 </template>
