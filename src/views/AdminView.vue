@@ -4,9 +4,10 @@ import { auth } from '/firebase/config'
 import { useRouter } from 'vue-router'
 import { signOut } from 'firebase/auth'
 import { db } from '/firebase/config'
-import { doc, onSnapshot, collection, query, where, orderBy } from 'firebase/firestore'
+import { doc, onSnapshot, collection, query, where, orderBy, updateDoc } from 'firebase/firestore'
 
 import { getActiveGame, listenToSubmissions } from '/firebase/gameHelpers'
+import { sendGameStartEmails } from '/firebase/emailNotifications'
 
 import BMGLogo from '/BMG-Logo.png'
 
@@ -18,7 +19,7 @@ import SubmissionsGallery from '../components/admin/SubmissionsGallery.vue'
 
 const router = useRouter()
 
-// Share states
+// Shared states
 const currentGame = ref(null)
 const allSubmissions = ref([])
 const leaderboard = ref([])
@@ -26,17 +27,22 @@ const liveLeaderboard = ref([])
 const users = ref(['All Users'])
 const selectedUser = ref('All Users')
 const loadingGame = ref(false)
-
 const liveFeed = ref([])
-
 const showLogoutModal = ref(false)
 const isLoggingOut = ref(false)
+
+// Next game countdown
+const nextGameDateTime = ref('')
+const isSavingNextGame = ref(false)
+
+// Email notification
+const isSendingNotif = ref(false)
+const notifSent = ref(false)
 
 let unsubscribeSubs = null
 let unsubscribeGame = null
 let unsubscribeLiveFeed = null
 
-// Lifecycle hooks
 onMounted(() => {
   loadGameData()
 })
@@ -47,17 +53,26 @@ onUnmounted(() => {
   if (unsubscribeLiveFeed) unsubscribeLiveFeed()
 })
 
-// Load game data and set up listeners
 const loadGameData = async () => {
   try {
     loadingGame.value = true
     currentGame.value = await getActiveGame()
-
     selectedUser.value = 'All Users'
 
     if (currentGame.value) {
       setupCurrentGameListener()
       setupLiveFeedListener()
+
+      // Load existing nextGameStartTime
+      const nextStart = currentGame.value.nextGameStartTime
+      if (nextStart) {
+        const ms = typeof nextStart === 'number' ? nextStart : nextStart?.toMillis?.() || 0
+        if (ms) {
+          const d = new Date(ms)
+          const pad = (n) => String(n).padStart(2, '0')
+          nextGameDateTime.value = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+        }
+      }
     } else {
       allSubmissions.value = []
       users.value = ['All Users']
@@ -74,7 +89,6 @@ const loadGameData = async () => {
 
 const setupCurrentGameListener = () => {
   if (unsubscribeSubs) unsubscribeSubs()
-
   if (!currentGame.value?.id) {
     allSubmissions.value = []
     return
@@ -97,7 +111,6 @@ const setupCurrentGameListener = () => {
 
 const setupLiveFeedListener = () => {
   if (unsubscribeLiveFeed) unsubscribeLiveFeed()
-
   if (!currentGame.value?.id) {
     liveFeed.value = []
     return
@@ -128,16 +141,11 @@ watch(
   },
 )
 
-// Users list for filtering
 const updateUsersList = (subs) => {
   const handleSet = new Set(['All Users'])
-
   subs.forEach((sub) => {
-    if (sub.instagramHandle) {
-      handleSet.add(sub.instagramHandle)
-    }
+    if (sub.instagramHandle) handleSet.add(sub.instagramHandle)
   })
-
   users.value = Array.from(handleSet).sort((a, b) => {
     if (a === 'All Users') return -1
     if (b === 'All Users') return 1
@@ -145,7 +153,6 @@ const updateUsersList = (subs) => {
   })
 }
 
-// Fastest completion leaderboard
 const updateLeaderboard = () => {
   if (allSubmissions.value.length === 0) {
     leaderboard.value = []
@@ -217,7 +224,6 @@ const updateLeaderboard = () => {
     .map((e, i) => ({ ...e, rank: i + 1 }))
 }
 
-// Live leaderboard based on approvals and submission times
 const updateLiveLeaderboard = () => {
   if (allSubmissions.value.length === 0) {
     liveLeaderboard.value = []
@@ -225,7 +231,6 @@ const updateLiveLeaderboard = () => {
   }
 
   const userMap = new Map()
-
   allSubmissions.value.forEach((sub) => {
     const { userId, instagramHandle, status, uploadedAt } = sub
     if (!userId) return
@@ -242,11 +247,7 @@ const updateLiveLeaderboard = () => {
 
     const u = userMap.get(userId)
     u.count++
-
-    if (uploadedAt?.toMillis() > u.lastTime) {
-      u.lastTime = uploadedAt.toMillis()
-    }
-
+    if (uploadedAt?.toMillis() > u.lastTime) u.lastTime = uploadedAt.toMillis()
     if (status === 'approved') u.approvedCount++
     if (status === 'disqualified') u.isDisqualified = true
   })
@@ -254,18 +255,10 @@ const updateLiveLeaderboard = () => {
   const list = []
   userMap.forEach((u, id) => {
     if (u.count !== 3) return
-
     if (u.isDisqualified) {
-      list.push({
-        id,
-        handle: u.handle,
-        approvedCount: 0,
-        timeMs: Infinity,
-        isDisqualified: true,
-      })
+      list.push({ id, handle: u.handle, approvedCount: 0, timeMs: Infinity, isDisqualified: true })
       return
     }
-
     list.push({
       id,
       handle: u.handle,
@@ -296,7 +289,6 @@ const formatDetailedTime = (ms) => {
   return `${minPart}${secPart}${msPart}`.trim()
 }
 
-// Watch submissions for both leaderboard updates
 watch(
   allSubmissions,
   () => {
@@ -306,7 +298,60 @@ watch(
   { deep: true },
 )
 
-// Logout
+// Save next game countdown
+const handleSaveNextGameTime = async () => {
+  if (!nextGameDateTime.value || !currentGame.value?.id) return
+  isSavingNextGame.value = true
+  try {
+    const targetMs = new Date(nextGameDateTime.value).getTime()
+    await updateDoc(doc(db, 'games', currentGame.value.id), {
+      nextGameStartTime: targetMs,
+    })
+    alert('Next game time saved! Countdown will show on the home page.')
+  } catch (error) {
+    alert('Failed to save: ' + error.message)
+  } finally {
+    isSavingNextGame.value = false
+  }
+}
+
+const handleClearNextGameTime = async () => {
+  if (!currentGame.value?.id) return
+  try {
+    await updateDoc(doc(db, 'games', currentGame.value.id), {
+      nextGameStartTime: null,
+    })
+    nextGameDateTime.value = ''
+    alert('Countdown cleared.')
+  } catch (error) {
+    alert('Failed: ' + error.message)
+  }
+}
+
+// Send email notification
+const handleSendNotification = async () => {
+  if (!currentGame.value?.nextGameStartTime) {
+    alert(' Please set the Next Game Countdown date and time first.')
+    return
+  }
+
+  isSendingNotif.value = true
+  const result = await sendGameStartEmails()
+  isSendingNotif.value = false
+
+  if (result.success) {
+    notifSent.value = true
+    alert(
+      `Email sent to ${result.count} subscribers!${result.failed > 0 ? ` (${result.failed} failed)` : ''}`,
+    )
+    setTimeout(() => (notifSent.value = false), 3000)
+  } else if (result.reason === 'no_subscribers') {
+    alert('No email subscribers yet.')
+  } else {
+    alert('Failed: ' + result.reason)
+  }
+}
+
 const confirmLogout = async () => {
   isLoggingOut.value = true
   try {
@@ -351,13 +396,79 @@ const confirmLogout = async () => {
           v-model:selected-user="selectedUser"
         />
       </div>
+
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
         <!-- Left Column -->
         <div class="space-y-6 row-end-3 md:row-end-auto">
           <GameStatus :current-game="currentGame" />
-          <!-- Live feed -->
+
+          <!-- Next Game Countdown -->
           <div class="bg-white rounded-lg shadow-sm p-6">
             <div class="flex items-center gap-2 mb-2">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+              </svg>
+              <h2 class="text-lg font-semibold text-dark-gray">Next Game Countdown</h2>
+            </div>
+            <p class="text-xs text-slate mb-4">
+              Set the next game start time, a countdown will show on the home page.
+            </p>
+            <input
+              v-model="nextGameDateTime"
+              type="datetime-local"
+              class="w-full px-3 py-2 bg-soft text-sm rounded-md border-0 focus:outline-none focus:ring-2 focus:ring-primary mb-3"
+            />
+            <div class="flex gap-2">
+              <button
+                @click="handleSaveNextGameTime"
+                :disabled="isSavingNextGame || !nextGameDateTime"
+                class="w-full py-3 rounded-md font-semibold text-white transition cursor-pointer disabled:opacity-50 bg-primary hover:bg-primary/90"
+              >
+                {{ isSavingNextGame ? 'Saving...' : 'Set Countdown' }}
+              </button>
+              <button
+                @click="handleClearNextGameTime"
+                class="px-4 bg-gray-200 text-dark-gray py-2 rounded-md text-sm font-semibold hover:bg-gray-300 transition cursor-pointer"
+              >
+                Clear
+              </button>
+            </div>
+          </div>
+
+          <!-- Email Notification -->
+          <div class="bg-white rounded-lg shadow-sm p-6">
+            <div class="flex items-center gap-2 mb-2">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+                />
+              </svg>
+              <h2 class="text-lg font-semibold text-dark-gray">Email Notification</h2>
+            </div>
+            <p class="text-xs text-slate mb-4">
+              Send an email to all subscribed players that the game is live.
+            </p>
+            <button
+              @click="handleSendNotification"
+              :disabled="isSendingNotif || !currentGame"
+              class="w-full py-3 rounded-md font-semibold text-white transition cursor-pointer disabled:opacity-50"
+              :class="notifSent ? 'bg-green-500' : 'bg-primary hover:bg-primary/90'"
+            >
+              {{ isSendingNotif ? 'Sending...' : notifSent ? 'Sent!' : 'Notify All Players' }}
+            </button>
+          </div>
+
+          <!-- Live Players -->
+          <div class="bg-white rounded-lg shadow-sm p-6">
+            <div class="flex items-center gap-2 mb-4">
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
                   stroke-linecap="round"
@@ -372,7 +483,6 @@ const confirmLogout = async () => {
                 <span class="text-xs text-green-600 font-medium">Live</span>
               </span>
             </div>
-
             <div v-if="liveFeed.length === 0" class="text-center text-slate py-8">
               No players have joined yet.
             </div>
@@ -391,6 +501,7 @@ const confirmLogout = async () => {
               </div>
             </div>
           </div>
+
           <CreateGameForm
             :current-game="currentGame"
             :loading-game="loadingGame"
@@ -398,7 +509,7 @@ const confirmLogout = async () => {
           />
         </div>
 
-        <!-- Right column -->
+        <!-- Right Column -->
         <div class="space-y-6">
           <Leaderboard :leaderboard="leaderboard" :live-leaderboard="liveLeaderboard" />
           <PrizeEditorForm :current-game="currentGame" @prize-saved="loadGameData" />
