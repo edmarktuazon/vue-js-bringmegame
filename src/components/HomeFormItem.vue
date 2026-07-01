@@ -237,7 +237,7 @@ const pad = (n) => String(n).padStart(2, '0')
               }"
             >
               <span v-if="notifyStatus === 'idle'">Notify Me</span>
-              <span v-else-if="notifyStatus === 'loading'">Saving...</span>
+              <span v-else-if="notifyStatus === 'loading'">Sending...</span>
               <span v-else-if="notifyStatus === 'success'">You'll be notified!</span>
               <span v-else-if="notifyStatus === 'error'">Try again</span>
             </button>
