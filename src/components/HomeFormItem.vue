@@ -5,7 +5,7 @@ import { useRouter } from 'vue-router'
 import { doc, onSnapshot } from 'firebase/firestore'
 import { db } from '/firebase/config'
 import { createUser, getActiveGame, updateUserCurrentGame } from '/firebase/gameHelpers'
-import { saveEmailSubscriber } from '/firebase/emailNotifications'
+import { saveNotifySubscriber } from '/firebase/notifySubscribers'
 
 const router = useRouter()
 
@@ -21,7 +21,7 @@ let countdownInterval = null
 const gameStartTime = ref(null)
 
 // Be Notified
-const notifyEmail = ref('')
+const notifyHandle = ref('')
 const notifyStatus = ref('idle')
 const notifyError = ref('')
 
@@ -69,20 +69,24 @@ const isCountdownActive = computed(() => {
 const handleBeNotified = async () => {
   notifyError.value = ''
 
-  if (!notifyEmail.value.trim()) {
-    notifyError.value = 'Please enter your email address.'
+  if (!notifyHandle.value.trim()) {
+    notifyError.value = 'Please enter your Instagram handle.'
     return
   }
 
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-  if (!emailRegex.test(notifyEmail.value.trim())) {
-    notifyError.value = 'Please enter a valid email address.'
+  if (!activeGame.value?.id) {
+    notifyError.value = 'No active game right now.'
     return
+  }
+
+  let handle = notifyHandle.value.trim()
+  if (!handle.startsWith('@')) {
+    handle = '@' + handle
   }
 
   notifyStatus.value = 'loading'
 
-  const result = await saveEmailSubscriber(notifyEmail.value.trim())
+  const result = await saveNotifySubscriber(handle, activeGame.value.id)
 
   if (result.success) {
     notifyStatus.value = 'success'
@@ -145,7 +149,7 @@ const handleSubmit = async (e) => {
     }
 
     if (activeGame.value.status === 'ended') {
-      throw new Error('This game has ended. Please wait for the next game!')
+      throw new Error('This game has ended or not yet started. Please wait for the game to start!')
     }
 
     const user = await createUser(handle)
@@ -183,11 +187,18 @@ const pad = (n) => String(n).padStart(2, '0')
           <img :src="BMGLogo" class="w-48 mb-6" alt="Bring Me Game Logo" />
         </div>
 
-        <!-- Countdown Timer -->
-        <div v-if="isCountdownActive" class="rounded-lg bg-purple-900 px-4 py-3 mb-3">
-          <p class="text-white text-xs font-semibold mb-1 uppercase tracking-wider">
-            Game Starts In:
-            <span class="ml-1 bg-green-400 text-white text-xs px-2 py-0.5 rounded-full">LIVE</span>
+        <!-- Countdown Timer badge -->
+        <div class="rounded-lg bg-purple-900 px-4 py-3 mb-3">
+          <p
+            class="text-white text-xs font-semibold mb-1 uppercase tracking-wider text-center gap-2"
+          >
+            Game Starting:
+            <span
+              class="text-xs px-2 py-0.5 rounded-full font-bold"
+              :class="isCountdownActive ? 'bg-purple-400' : 'bg-green-400'"
+            >
+              {{ isCountdownActive ? 'SOON' : 'NOW' }}
+            </span>
           </p>
           <div class="flex items-center justify-center gap-1 text-white">
             <div class="text-center">
@@ -207,86 +218,88 @@ const pad = (n) => String(n).padStart(2, '0')
           </div>
         </div>
 
-        <!-- Be Notified section, only show when countdown is active -->
-        <div
-          v-if="isCountdownActive"
-          class="rounded-lg p-4 border-2 border-dashed border-primary/40 bg-primary/5"
-        >
-          <p class="text-xs font-semibold text-dark-gray mb-1">
-            Get notified when the game is about to start!
-          </p>
-          <p class="text-xs text-slate mb-3">Enter your email to receive a notification.</p>
-          <div class="flex flex-col gap-2">
-            <input
-              v-model="notifyEmail"
-              type="email"
-              placeholder="your@email.com"
-              class="bg-white w-full text-dark-gray font-montserrat text-sm p-2.5 rounded-md border border-gray-200 focus:outline-none focus:ring-2 focus:ring-primary transition-all"
-              :disabled="notifyStatus === 'loading' || notifyStatus === 'success'"
-            />
-            <button
-              @click="handleBeNotified"
-              :disabled="notifyStatus === 'loading' || notifyStatus === 'success'"
-              type="button"
-              class="w-full font-semibold py-2.5 rounded-md text-sm transition-all duration-200 cursor-pointer disabled:cursor-not-allowed"
-              :class="{
-                'bg-primary text-white hover:bg-primary/90': notifyStatus === 'idle',
-                'bg-gray-400 text-white': notifyStatus === 'loading',
-                'bg-green-500 text-white': notifyStatus === 'success',
-                'bg-red-400 text-white hover:bg-red-500': notifyStatus === 'error',
-              }"
-            >
-              <span v-if="notifyStatus === 'idle'">Notify Me</span>
-              <span v-else-if="notifyStatus === 'loading'">Sending...</span>
-              <span v-else-if="notifyStatus === 'success'">You'll be notified!</span>
-              <span v-else-if="notifyStatus === 'error'">Try again</span>
-            </button>
-            <p v-if="notifyError" class="text-red-500 text-xs">{{ notifyError }}</p>
+        <!-- NOTIFY FORM: shows only while countdown is active -->
+        <div v-if="isCountdownActive">
+          <div class="rounded-lg p-4 border-2 border-dashed border-primary/40 bg-primary/5 mb-3">
+            <p class="text-sm text-dark-gray mb-3 text-center">
+              Enter your Instagram handle to be Notified via Direct Message
+            </p>
+            <div class="flex flex-col gap-2">
+              <input
+                v-model="notifyHandle"
+                type="text"
+                placeholder="@yourhandle"
+                class="bg-white w-full text-dark-gray font-montserrat text-sm p-2.5 rounded-md border border-gray-200 focus:outline-none focus:ring-2 focus:ring-primary transition-all"
+                :disabled="notifyStatus === 'loading' || notifyStatus === 'success'"
+              />
+              <button
+                @click="handleBeNotified"
+                :disabled="notifyStatus === 'loading' || notifyStatus === 'success'"
+                type="button"
+                class="w-full font-semibold py-2.5 rounded-md text-sm transition-all duration-200 cursor-pointer disabled:cursor-not-allowed"
+                :class="{
+                  'bg-primary text-white hover:bg-primary/90': notifyStatus === 'idle',
+                  'bg-gray-400 text-white': notifyStatus === 'loading',
+                  'bg-green-500 text-white': notifyStatus === 'success',
+                  'bg-red-400 text-white hover:bg-red-500': notifyStatus === 'error',
+                }"
+              >
+                <span v-if="notifyStatus === 'idle'">Notify Me</span>
+                <span v-else-if="notifyStatus === 'loading'">Sending...</span>
+                <span v-else-if="notifyStatus === 'success'">You'll be notified!</span>
+                <span v-else-if="notifyStatus === 'error'">Try again</span>
+              </button>
+              <p v-if="notifyError" class="text-red-500 text-xs">{{ notifyError }}</p>
+            </div>
           </div>
+          <div class="pb-6"></div>
         </div>
 
-        <!-- Game Status -->
-        <div class="px-6 pt-6 mb-3">
-          <p v-if="activeGame" class="text-xs text-primary font-semibold mb-1">
-            Game Status: {{ statusLabel(activeGame.status) }}
-          </p>
-          <p class="text-sm text-dark-gray">Enter your Instagram handle to join the game.</p>
-        </div>
+        <!-- JOIN FORM: shows only when countdown has ended / no countdown set -->
+        <div v-else>
+          <div class="px-2 pt-3 mb-3">
+            <p v-if="activeGame" class="text-xs text-primary font-semibold mb-1 text-center">
+              Game Status: {{ statusLabel(activeGame.status) }}
+            </p>
+            <p class="text-sm text-dark-gray text-center">
+              Enter your Instagram handle to join the game.
+            </p>
+          </div>
 
-        <!-- Input + Join button -->
-        <div class="flex items-center flex-col space-y-4">
-          <input
-            v-model="instagramHandle"
-            type="text"
-            class="bg-soft w-full text-dark-gray font-montserrat text-sm p-3 rounded-md outline-primary focus:outline-none focus:ring-2 focus:ring-primary transition-all"
-            placeholder="@yourhandle"
-            required
-            :disabled="loading"
-          />
+          <div class="flex items-center flex-col space-y-4">
+            <input
+              v-model="instagramHandle"
+              type="text"
+              class="bg-soft w-full text-dark-gray font-montserrat text-sm p-3 rounded-md outline-primary focus:outline-none focus:ring-2 focus:ring-primary transition-all"
+              placeholder="@yourhandle"
+              required
+              :disabled="loading"
+            />
 
-          <button
-            type="submit"
-            @click="handleSubmit"
-            :disabled="loading"
-            class="w-full bg-primary text-white font-semibold py-3 rounded-md transition-all duration-200 hover:bg-primary/90 focus:outline focus:outline-2 focus:outline-primary disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-          >
-            <span v-if="loading">Joining...</span>
-            <span v-else>Join Game</span>
-          </button>
+            <button
+              type="submit"
+              @click="handleSubmit"
+              :disabled="loading"
+              class="w-full bg-green-500 text-white font-semibold py-3 rounded-md transition-all duration-200 hover:bg-green-600 focus:outline focus:outline-2 focus:outline-green-500 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+            >
+              <span v-if="loading">Joining...</span>
+              <span v-else>Join Game</span>
+            </button>
 
-          <p v-if="errorMessage" class="text-red-500 text-xs">{{ errorMessage }}</p>
-        </div>
+            <p v-if="errorMessage" class="text-red-500 text-xs">{{ errorMessage }}</p>
+          </div>
 
-        <div class="mt-3 pb-6">
-          <p class="text-xs text-slate">
-            By clicking "Join Game", you agree that you are the owner of the given Instagram handle.
-            Any prizes won will be communicated directly via Instagram.
-          </p>
+          <div class="mt-3 pb-6">
+            <p class="text-xs text-slate">
+              By clicking "Join Game", you agree that you are the owner of the given Instagram
+              handle. Any prizes won will be communicated directly via Instagram.
+            </p>
+          </div>
         </div>
       </div>
 
       <!-- How It Works -->
-      <!-- <div class="mt-6 bg-white rounded-lg shadow-xl w-full px-6 py-6">
+      <div class="mt-6 bg-white rounded-lg shadow-xl w-full px-6 py-6">
         <div class="flex items-center justify-center gap-2 mb-6">
           <div class="h-px bg-gray-200 flex-1"></div>
           <p class="text-xs font-bold text-dark-gray tracking-widest uppercase">How It Works</p>
@@ -355,7 +368,7 @@ const pad = (n) => String(n).padStart(2, '0')
             <p class="text-xs font-bold text-dark-gray uppercase leading-tight">Win Real Prizes</p>
           </div>
         </div>
-      </div> -->
+      </div>
     </div>
   </main>
 </template>

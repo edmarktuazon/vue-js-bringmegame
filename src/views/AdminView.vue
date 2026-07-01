@@ -7,7 +7,6 @@ import { db } from '/firebase/config'
 import { doc, onSnapshot, collection, query, where, orderBy, updateDoc } from 'firebase/firestore'
 
 import { getActiveGame, listenToSubmissions } from '/firebase/gameHelpers'
-import { sendGameStartEmails } from '/firebase/emailNotifications'
 
 import BMGLogo from '/BMG-Logo.png'
 
@@ -16,8 +15,13 @@ import GameStatus from '../components/admin/GameStatus.vue'
 import Leaderboard from '../components/admin/Leaderboard.vue'
 import PrizeEditorForm from '../components/admin/PrizeEditorForm.vue'
 import SubmissionsGallery from '../components/admin/SubmissionsGallery.vue'
+import { listenToNotifySubscribers, formatAEST } from '/firebase/notifySubscribers'
 
 const router = useRouter()
+
+// nofify subscribers
+const notifySubscribers = ref([])
+let unsubscribeNotify = null
 
 // Shared states
 const currentGame = ref(null)
@@ -35,10 +39,6 @@ const isLoggingOut = ref(false)
 const nextGameDateTime = ref('')
 const isSavingNextGame = ref(false)
 
-// Email notification
-const isSendingNotif = ref(false)
-const notifSent = ref(false)
-
 let unsubscribeSubs = null
 let unsubscribeGame = null
 let unsubscribeLiveFeed = null
@@ -51,6 +51,7 @@ onUnmounted(() => {
   if (unsubscribeSubs) unsubscribeSubs()
   if (unsubscribeGame) unsubscribeGame()
   if (unsubscribeLiveFeed) unsubscribeLiveFeed()
+  if (unsubscribeNotify) unsubscribeNotify()
 })
 
 const loadGameData = async () => {
@@ -62,6 +63,7 @@ const loadGameData = async () => {
     if (currentGame.value) {
       setupCurrentGameListener()
       setupLiveFeedListener()
+      setupNotifyListener()
 
       // Load existing nextGameStartTime
       const nextStart = currentGame.value.nextGameStartTime
@@ -106,6 +108,17 @@ const setupCurrentGameListener = () => {
     if (snap.exists()) {
       currentGame.value = { id: snap.id, ...snap.data() }
     }
+  })
+}
+
+const setupNotifyListener = () => {
+  if (unsubscribeNotify) unsubscribeNotify()
+  if (!currentGame.value?.id) {
+    notifySubscribers.value = []
+    return
+  }
+  unsubscribeNotify = listenToNotifySubscribers(currentGame.value.id, (subs) => {
+    notifySubscribers.value = subs
   })
 }
 
@@ -328,30 +341,6 @@ const handleClearNextGameTime = async () => {
   }
 }
 
-// Send email notification
-const handleSendNotification = async () => {
-  if (!currentGame.value?.nextGameStartTime) {
-    alert(' Please set the Next Game Countdown date and time first.')
-    return
-  }
-
-  isSendingNotif.value = true
-  const result = await sendGameStartEmails()
-  isSendingNotif.value = false
-
-  if (result.success) {
-    notifSent.value = true
-    alert(
-      `Email sent to ${result.count} subscribers!${result.failed > 0 ? ` (${result.failed} failed)` : ''}`,
-    )
-    setTimeout(() => (notifSent.value = false), 3000)
-  } else if (result.reason === 'no_subscribers') {
-    alert('No email subscribers yet.')
-  } else {
-    alert('Failed: ' + result.reason)
-  }
-}
-
 const confirmLogout = async () => {
   isLoggingOut.value = true
   try {
@@ -440,7 +429,7 @@ const confirmLogout = async () => {
             </div>
           </div>
 
-          <!-- Email Notification -->
+          <!-- Show All Users (Notify Subscribers) -->
           <div class="bg-white rounded-lg shadow-sm p-6">
             <div class="flex items-center gap-2 mb-2">
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -448,22 +437,40 @@ const confirmLogout = async () => {
                   stroke-linecap="round"
                   stroke-linejoin="round"
                   stroke-width="2"
-                  d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+                  d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"
                 />
               </svg>
-              <h2 class="text-lg font-semibold text-dark-gray">Email Notification</h2>
+              <h2 class="text-lg font-semibold text-dark-gray">Show All Users</h2>
             </div>
             <p class="text-xs text-slate mb-4">
-              Send an email to all subscribed players that the game is live.
+              Instagram handles that entered to be notified for this game (AEST — Melbourne, VIC).
             </p>
-            <button
-              @click="handleSendNotification"
-              :disabled="isSendingNotif || !currentGame"
-              class="w-full py-3 rounded-md font-semibold text-white transition cursor-pointer disabled:opacity-50"
-              :class="notifSent ? 'bg-green-500' : 'bg-primary hover:bg-primary/90'"
-            >
-              {{ isSendingNotif ? 'Sending...' : notifSent ? 'Sent!' : 'Notify All Players' }}
-            </button>
+
+            <div v-if="notifySubscribers.length === 0" class="text-center text-slate py-8 text-sm">
+              No users have entered their handle yet.
+            </div>
+            <div v-else class="overflow-x-auto max-h-96 overflow-y-auto">
+              <table class="w-full text-sm">
+                <thead class="sticky top-0 bg-white">
+                  <tr class="text-left text-xs text-slate uppercase border-b border-gray-200">
+                    <th class="py-2 pr-2">Instagram Handle</th>
+                    <th class="py-2 pr-2">Date</th>
+                    <th class="py-2">Time</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr
+                    v-for="sub in notifySubscribers"
+                    :key="sub.id"
+                    class="border-b border-gray-100 last:border-0"
+                  >
+                    <td class="py-2 pr-2 font-medium text-dark-gray">{{ sub.instagramHandle }}</td>
+                    <td class="py-2 pr-2 text-slate">{{ formatAEST(sub.createdAt).date }}</td>
+                    <td class="py-2 text-slate">{{ formatAEST(sub.createdAt).time }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
 
           <!-- Live Players -->
