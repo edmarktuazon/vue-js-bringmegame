@@ -266,7 +266,7 @@ function formatDetailedTime(ms) {
 </script>
 
 <template>
-  <div class="main min-h-screen bg-soft font-montserrat">
+  <div class="main min-h-screen bg-primary font-montserrat">
     <header class="bg-white shadow-xl px-4 py-4 sticky top-0 z-10">
       <div class="flex justify-between items-center w-full max-w-4xl mx-auto">
         <div class="flex items-center gap-2">

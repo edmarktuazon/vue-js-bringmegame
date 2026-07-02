@@ -46,7 +46,7 @@ const handleSubmit = async (e) => {
 
     await router.push('/admin')
   } catch (error) {
-    console.error('❌ Login error:', error.code, error.message)
+    console.error('Login error:', error.code, error.message)
     switch (error.code) {
       case 'auth/user-not-found':
       case 'auth/wrong-password':
@@ -67,7 +67,7 @@ const handleSubmit = async (e) => {
 
 <template>
   <div>
-    <header class="bg-white shadow-xl font-montserrat px-4 py-4 fixed w-full top-0 left-0 z-10">
+    <header class="font-montserrat px-4 py-4 fixed w-full top-0 left-0 z-10">
       <div class="flex justify-between items-center w-full max-w-6xl mx-auto">
         <div></div>
         <nav>

@@ -46,7 +46,16 @@ const startCountdownTimer = (targetMs) => {
 
 const checkAndStartCountdown = () => {
   const nextStart = activeGame.value?.nextGameStartTime
-  if (!nextStart) return
+
+  if (!nextStart) {
+    gameStartTime.value = null
+    countdown.value = { hours: 0, minutes: 0, seconds: 0 }
+    if (countdownInterval) {
+      clearInterval(countdownInterval)
+      countdownInterval = null
+    }
+    return
+  }
 
   const targetMs = typeof nextStart === 'number' ? nextStart : nextStart?.toMillis?.() || 0
 
@@ -55,6 +64,7 @@ const checkAndStartCountdown = () => {
     startCountdownTimer(targetMs)
   } else {
     gameStartTime.value = null
+    countdown.value = { hours: 0, minutes: 0, seconds: 0 }
     if (countdownInterval) {
       clearInterval(countdownInterval)
       countdownInterval = null
@@ -123,12 +133,12 @@ onUnmounted(() => {
   if (countdownInterval) clearInterval(countdownInterval)
 })
 
-const statusLabel = (status) => {
-  if (status === 'waiting') return 'OPEN'
-  if (status === 'active') return 'PLAYING'
-  if (status === 'ended') return 'CLOSED'
-  return status.toUpperCase()
-}
+// const statusLabel = (status) => {
+//   if (status === 'waiting') return 'OPEN'
+//   if (status === 'active') return 'PLAYING'
+//   if (status === 'ended') return 'CLOSED'
+//   return status.toUpperCase()
+// }
 
 const handleSubmit = async (e) => {
   e.preventDefault()
@@ -178,7 +188,7 @@ const pad = (n) => String(n).padStart(2, '0')
 
 <template>
   <main
-    class="main min-h-screen flex flex-col justify-center items-center font-montserrat px-4 py-24"
+    class="main bg-primary flex flex-col justify-center items-center font-montserrat px-4 py-16 overflow-y-auto"
   >
     <div class="relative w-full max-w-sm text-center">
       <div class="rounded-lg bg-white shadow-xl px-6 w-full">
@@ -259,7 +269,7 @@ const pad = (n) => String(n).padStart(2, '0')
         <div v-else>
           <div class="px-2 pt-3 mb-3">
             <p v-if="activeGame" class="text-xs text-primary font-semibold mb-1 text-center">
-              Game Status: {{ statusLabel(activeGame.status) }}
+              <!-- Game Status: {{ statusLabel(activeGame.status) }} -->
             </p>
             <p class="text-sm text-dark-gray text-center">
               Enter your Instagram handle to join the game.
@@ -375,6 +385,7 @@ const pad = (n) => String(n).padStart(2, '0')
 
 <style scoped>
 .main {
+  min-height: 100dvh;
   background-image: radial-gradient(circle, hsl(270 50% 88%) 0.125rem, transparent 0.125rem);
   background-size: 1.25rem 1.25rem;
 }

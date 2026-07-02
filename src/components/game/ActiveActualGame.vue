@@ -38,7 +38,7 @@ const closeExample = () => {
     <!-- Progress bar -->
     <div class="bg-gray-200 rounded-full h-4 mb-6 overflow-hidden">
       <div
-        class="bg-primary h-4 transition-all duration-500"
+        class="bg-purple-900 h-4 transition-all duration-500"
         :style="{
           width: `${(Object.keys(props.submissions || {}).length / (props.game?.prompts?.length || 1)) * 100}%`,
         }"

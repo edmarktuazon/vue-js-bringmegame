@@ -15,12 +15,21 @@ import GameStatus from '../components/admin/GameStatus.vue'
 import Leaderboard from '../components/admin/Leaderboard.vue'
 import PrizeEditorForm from '../components/admin/PrizeEditorForm.vue'
 import SubmissionsGallery from '../components/admin/SubmissionsGallery.vue'
-import { listenToNotifySubscribers, formatAEST } from '/firebase/notifySubscribers'
+import {
+  listenToNotifySubscribers,
+  deleteNotifySubscriber,
+  deleteAllNotifySubscribers,
+  formatAEST,
+  melbourneInputToUTCMillis,
+  utcMillisToMelbourneInput,
+} from '/firebase/notifySubscribers'
 
 const router = useRouter()
 
 // nofify subscribers
 const notifySubscribers = ref([])
+const isClearingSubs = ref(false)
+const deletingSubId = ref(null)
 let unsubscribeNotify = null
 
 // Shared states
@@ -70,9 +79,7 @@ const loadGameData = async () => {
       if (nextStart) {
         const ms = typeof nextStart === 'number' ? nextStart : nextStart?.toMillis?.() || 0
         if (ms) {
-          const d = new Date(ms)
-          const pad = (n) => String(n).padStart(2, '0')
-          nextGameDateTime.value = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+          nextGameDateTime.value = utcMillisToMelbourneInput(ms)
         }
       }
     } else {
@@ -316,11 +323,11 @@ const handleSaveNextGameTime = async () => {
   if (!nextGameDateTime.value || !currentGame.value?.id) return
   isSavingNextGame.value = true
   try {
-    const targetMs = new Date(nextGameDateTime.value).getTime()
+    const targetMs = melbourneInputToUTCMillis(nextGameDateTime.value)
     await updateDoc(doc(db, 'games', currentGame.value.id), {
       nextGameStartTime: targetMs,
     })
-    alert('Next game time saved! Countdown will show on the home page.')
+    alert('Next game time saved (AEST — Melbourne, VIC)! Countdown will show on the home page.')
   } catch (error) {
     alert('Failed to save: ' + error.message)
   } finally {
@@ -328,8 +335,37 @@ const handleSaveNextGameTime = async () => {
   }
 }
 
+const handleDeleteSubscriber = async (subId) => {
+  deletingSubId.value = subId
+  const result = await deleteNotifySubscriber(subId)
+  deletingSubId.value = null
+  if (!result.success) {
+    alert('Failed to delete: ' + result.error)
+  }
+}
+
+const handleClearAllSubscribers = async () => {
+  if (!currentGame.value?.id) return
+  if (!confirm('Delete all entries in this table? This cannot be undone.')) return
+
+  isClearingSubs.value = true
+  const result = await deleteAllNotifySubscribers(currentGame.value.id)
+  isClearingSubs.value = false
+
+  if (!result.success) {
+    alert('Failed to clear: ' + result.error)
+  }
+}
+
 const handleClearNextGameTime = async () => {
   if (!currentGame.value?.id) return
+
+  if (
+    !confirm('Clear the countdown? The home page will immediately switch to the Join Game form.')
+  ) {
+    return
+  }
+
   try {
     await updateDoc(doc(db, 'games', currentGame.value.id), {
       nextGameStartTime: null,
@@ -431,16 +467,26 @@ const confirmLogout = async () => {
 
           <!-- Show All Users (Notify Subscribers) -->
           <div class="bg-white rounded-lg shadow-sm p-6">
-            <div class="flex items-center gap-2 mb-2">
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"
-                />
-              </svg>
-              <h2 class="text-lg font-semibold text-dark-gray">Show All Users</h2>
+            <div class="flex items-center justify-between mb-2">
+              <div class="flex items-center gap-2">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"
+                  />
+                </svg>
+                <h2 class="text-lg font-semibold text-dark-gray">Show All Users</h2>
+              </div>
+              <button
+                v-if="notifySubscribers.length > 0"
+                @click="handleClearAllSubscribers"
+                :disabled="isClearingSubs"
+                class="text-xs font-medium text-red-500 hover:text-red-600 cursor-pointer disabled:opacity-50"
+              >
+                {{ isClearingSubs ? 'Clearing...' : 'Clear All' }}
+              </button>
             </div>
             <p class="text-xs text-slate mb-4">
               Instagram handles that entered to be notified for this game (AEST — Melbourne, VIC).
@@ -455,7 +501,8 @@ const confirmLogout = async () => {
                   <tr class="text-left text-xs text-slate uppercase border-b border-gray-200">
                     <th class="py-2 pr-2">Instagram Handle</th>
                     <th class="py-2 pr-2">Date</th>
-                    <th class="py-2">Time</th>
+                    <th class="py-2 pr-2">Time</th>
+                    <th class="py-2 text-right"></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -466,7 +513,24 @@ const confirmLogout = async () => {
                   >
                     <td class="py-2 pr-2 font-medium text-dark-gray">{{ sub.instagramHandle }}</td>
                     <td class="py-2 pr-2 text-slate">{{ formatAEST(sub.createdAt).date }}</td>
-                    <td class="py-2 text-slate">{{ formatAEST(sub.createdAt).time }}</td>
+                    <td class="py-2 pr-2 text-slate">{{ formatAEST(sub.createdAt).time }}</td>
+                    <td class="py-2 text-right">
+                      <button
+                        @click="handleDeleteSubscriber(sub.id)"
+                        :disabled="deletingSubId === sub.id"
+                        class="text-slate hover:text-red-500 cursor-pointer disabled:opacity-50 transition"
+                        title="Delete entry"
+                      >
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                          />
+                        </svg>
+                      </button>
+                    </td>
                   </tr>
                 </tbody>
               </table>

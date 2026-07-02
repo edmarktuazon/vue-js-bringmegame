@@ -314,7 +314,7 @@ const compressImage = (file, options = {}) => {
 </script>
 
 <template>
-  <main class="main min-h-screen bg-soft font-montserrat">
+  <main class="main min-h-screen bg-primary font-montserrat">
     <NavigationGame @open-exit-modal="showExitGameModal = true" />
 
     <div class="max-w-4xl mx-auto px-4 py-8">

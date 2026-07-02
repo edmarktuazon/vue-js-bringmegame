@@ -34,12 +34,12 @@ const modelValue = defineModel()
               />
             </svg>
           </div>
-          <h3 class="text-2xl font-bold text-dark-gray mb-2">🎉 Challenge Complete!</h3>
-          <p class="text-slate mb-6">You've successfully uploaded all 3 photos!</p>
+          <h3 class="text-2xl font-bold text-white mb-2">🎉 Challenge Complete!</h3>
+          <p class="text-white mb-6">You've successfully uploaded all 3 photos!</p>
         </div>
 
         <div class="bg-primary/10 rounded-lg p-6 mb-6">
-          <p class="text-sm text-slate mb-2">Your completion time:</p>
+          <p class="text-sm text-white mb-2">Your completion time:</p>
           <div class="text-3xl font-bold tracking-wider text-primary">
             {{ completionTime?.formattedTime || 'Calculating...' }}
           </div>
@@ -50,7 +50,7 @@ const modelValue = defineModel()
             class="px-4 py-2 text-sm font-medium text-white rounded-md bg-primary disabled:opacity-50 cursor-pointer"
             >Go to Leaderboard</router-link
           >
-          <span class="text-slate text-sm">or</span>
+          <span class="text-white text-sm">or</span>
           <button
             @click="emit('exit')"
             :disabled="isLoggingOut"
